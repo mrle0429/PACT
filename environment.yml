@@ -1,0 +1,15 @@
+name: ob_dataset
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - nltk>=3.8
+    - tiktoken>=0.7
+    - python-dotenv>=1.0
+    - openai>=1.30
+    - anthropic>=0.30
+    - google-genai>=1.0
+    - tqdm>=4.66

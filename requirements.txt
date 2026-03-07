@@ -1,0 +1,28 @@
+# 核心依赖
+pysbd>=0.3
+tiktoken>=0.7
+
+# OpenAI
+openai>=1.30
+
+# Anthropic (Claude)
+anthropic>=0.30
+
+# Google Gemini
+google-genai>=1.0
+
+# 环境变量加载
+python-dotenv>=1.0
+
+# 进度条（pipeline 可选增强，已在代码中按需引入）
+tqdm>=4.66
+
+# Parquet 支持（XSum 数据源）
+pandas>=2.0
+pyarrow>=14.0
+
+# HuggingFace 数据集加载
+datasets>=2.18
+
+# Kaggle 数据集加载（DAIGT-v2）
+kagglehub>=0.3
