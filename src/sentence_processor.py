@@ -41,16 +41,23 @@ class SentenceSelection:
     def k(self) -> int:
         return len(self.selected_indices)
 
+    def build_mixed_sentences(self, rewrites: dict[int, str]) -> list[str]:
+        """
+        将 API 返回的改写句子（{原索引: 改写文本}）安全回填。
+        未选中 / 未被改写的句子保持原样。
+        """
+        result = list(self.sentences)
+        for idx, new_sentence in rewrites.items():
+            if 0 <= idx < self.n and new_sentence and new_sentence.strip():
+                result[idx] = new_sentence.strip()
+        return result
+
     def build_mixed_text(self, rewrites: dict[int, str]) -> str:
         """
         将 API 返回的改写句子（{原索引: 改写文本}）安全回填，
         拼接为最终混合文档。未选中 / 未被改写的句子保持原样。
         """
-        result = list(self.sentences)     # 浅拷贝，避免污染原始数据
-        for idx, new_sentence in rewrites.items():
-            if 0 <= idx < self.n and new_sentence and new_sentence.strip():
-                result[idx] = new_sentence.strip()
-        return " ".join(result)
+        return " ".join(self.build_mixed_sentences(rewrites))
 
     def sentence_label_array(self, rewrites: dict[int, str]) -> list[int]:
         """

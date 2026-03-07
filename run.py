@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from pathlib import Path
 
 from src.config import DatasetConfig, SUPPORTED_MODELS
 from src.pipeline import DatasetPipeline
@@ -84,8 +85,7 @@ def list_models() -> None:
 
 async def run_batch(args: argparse.Namespace) -> None:
     """批量数据集构建。"""
-    from pathlib import Path as _Path
-    source_tag: str = _Path(args.source).stem
+    source_tag = Path(args.source).stem
 
     cfg = DatasetConfig(
         source_path=args.source,

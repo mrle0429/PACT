@@ -108,8 +108,7 @@ class HumanTextCleaner:
     def __init__(self, cfg: HumanTextCleanerConfig | None = None):
         self.cfg = cfg or HumanTextCleanerConfig()
         # 保持句子文本表面形式，避免 clean=True 改写引号/撇号。
-        self._splitter_for_filter = pysbd.Segmenter(language=self.cfg.language, clean=False)
-        self._splitter_for_count = pysbd.Segmenter(language=self.cfg.language, clean=False)
+        self._segmenter = pysbd.Segmenter(language=self.cfg.language, clean=False)
 
     def clean_dataset(
         self,
@@ -192,8 +191,8 @@ class HumanTextCleaner:
         source = doc_id.split("_")[0] if "_" in doc_id else ""
         normalized = self._normalize_text(original_text)
 
-        original_sentences = self._split_for_count(original_text)
-        candidate_sentences = self._split_for_filter(normalized)
+        original_sentences = self._split_sentences(original_text)
+        candidate_sentences = self._split_sentences(normalized)
 
         kept_sentences: list[str] = []
         removal_reasons: Counter[str] = Counter()
@@ -223,7 +222,7 @@ class HumanTextCleaner:
             })
 
         cleaned_text = self._finalize_text(" ".join(kept_sentences))
-        cleaned_sentences = self._split_for_count(cleaned_text)
+        cleaned_sentences = self._split_sentences(cleaned_text)
 
         cleaned_record = dict(record)
         cleaned_record["text"] = cleaned_text
@@ -267,15 +266,10 @@ class HumanTextCleaner:
         text = _MULTISPACE_RE.sub(" ", text)
         return text.strip()
 
-    def _split_for_filter(self, text: str) -> list[str]:
+    def _split_sentences(self, text: str) -> list[str]:
         if not text:
             return []
-        return [s.strip() for s in self._splitter_for_filter.segment(text) if s.strip()]
-
-    def _split_for_count(self, text: str) -> list[str]:
-        if not text:
-            return []
-        return [s.strip() for s in self._splitter_for_count.segment(text) if s.strip()]
+        return [s.strip() for s in self._segmenter.segment(text) if s.strip()]
 
     def _classify_sentence_noise(self, sentence: str, source: str) -> str | None:
         sentence = sentence.strip()

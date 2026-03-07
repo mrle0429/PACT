@@ -15,9 +15,6 @@ import re
 from collections import Counter
 
 from .config import DatasetConfig
-from .utils import get_logger
-
-logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +177,6 @@ def compute_labels(
     original_text: str,
     mixed_sentences: list[str],
     ai_indices: list[int],
-    mixing_mode: str,
     cfg: DatasetConfig,
 ) -> dict:
     """

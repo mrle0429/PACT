@@ -21,9 +21,9 @@ import threading
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from .config import DatasetConfig, ModelConfig, SUPPORTED_MODELS
+from .config import DatasetConfig, ModelConfig
 from .sentence_processor import build_rewrite_prompt
 from .utils import (
     AsyncRateLimiter,
@@ -33,9 +33,6 @@ from .utils import (
     extract_json_from_llm_response,
     get_logger,
 )
-
-if TYPE_CHECKING:
-    pass
 
 logger = get_logger(__name__)
 
@@ -315,7 +312,6 @@ class AnthropicRewriter(BaseLLMRewriter):
         super().__init__(cfg, model_cfg, api_logger)
         try:
             import anthropic
-            self._anthropic = anthropic
         except ImportError as exc:
             raise ImportError("请安装 anthropic: pip install anthropic") from exc
         if not cfg.anthropic_api_key:
@@ -398,7 +394,6 @@ class MiniMaxRewriter(BaseLLMRewriter):
         super().__init__(cfg, model_cfg, api_logger)
         try:
             import anthropic
-            self._anthropic = anthropic
         except ImportError as exc:
             raise ImportError("MiniMax 使用 Anthropic SDK，请安装: pip install anthropic") from exc
         if not cfg.minimax_api_key:

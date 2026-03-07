@@ -38,7 +38,6 @@ from .llm_rewriter import BaseLLMRewriter, create_rewriter
 from .sentence_processor import (
     SentenceSelection,
     enumerate_variants,
-    split_into_sentences,
 )
 from .utils import (
     NonRetryableAPIError,
@@ -329,7 +328,6 @@ class DatasetPipeline:
         """处理单个 VariantTask，返回 (DatasetRecord, in_tok, out_tok) 或 None（跳过）。"""
         sel = task.selection
         doc = task.doc
-        t_start = time.monotonic()
 
         try:
             # ---- ratio = 0.0：纯人类基线，无需调用 API ----
@@ -363,11 +361,7 @@ class DatasetPipeline:
                     return None
 
             # ---- 回填 ----
-            mixed_sentences = list(sel.sentences)
-            for idx, new_text in rewrites.items():
-                if new_text.strip():
-                    mixed_sentences[idx] = new_text.strip()
-
+            mixed_sentences = sel.build_mixed_sentences(rewrites)
             mixed_text = " ".join(mixed_sentences)
             sentence_labels = sel.sentence_label_array(rewrites)
 
@@ -376,12 +370,8 @@ class DatasetPipeline:
                 original_text=doc.text,
                 mixed_sentences=mixed_sentences,
                 ai_indices=list(rewrites.keys()),
-                mixing_mode=sel.mode,
                 cfg=self.cfg,
             )
-            label_dict["sentence_labels"] = sentence_labels
-
-            elapsed = round(time.monotonic() - t_start, 3)
 
             return DatasetRecord(
                 id=task.record_id,
@@ -578,11 +568,7 @@ async def process_single_text(
         in_tok, out_tok = result.input_tokens, result.output_tokens
 
     # Step 4: 回填
-    mixed_sentences = list(sentences)
-    for idx, new_text in rewrites.items():
-        if new_text.strip():
-            mixed_sentences[idx] = new_text.strip()
-
+    mixed_sentences = selection.build_mixed_sentences(rewrites)
     mixed_text = " ".join(mixed_sentences)
     sentence_labels = selection.sentence_label_array(rewrites)
 
@@ -591,10 +577,8 @@ async def process_single_text(
         original_text=text,
         mixed_sentences=mixed_sentences,
         ai_indices=list(rewrites.keys()),
-        mixing_mode=mixing_mode,
         cfg=cfg,
     )
-    labels["sentence_labels"] = sentence_labels
 
     return SingleTextResult(
         original_text=text,
