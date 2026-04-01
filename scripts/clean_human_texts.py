@@ -3,7 +3,7 @@
 已采样人类文本清洗入口脚本。
 
 用法：
-    python clean_human_texts.py \
+    python scripts/clean_human_texts.py \
         --input data/human_texts_1k.jsonl \
         --output data/human_texts_1k.cleaned.jsonl
 """
@@ -11,6 +11,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def main() -> None:
@@ -52,7 +58,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    from src.human_text_cleaner import HumanTextCleaner, HumanTextCleanerConfig
+    from src.preprocess import HumanTextCleaner, HumanTextCleanerConfig
 
     log_output = args.log_output or _derive_companion_path(args.output, ".cleaning_log.jsonl")
     summary_output = args.summary_output or _derive_companion_path(args.output, ".cleaning_summary.json")

@@ -4,32 +4,29 @@
 用法示例：
   # -------- 批量数据集构建 --------
 
-  # 基本运行（使用 qwen3.5-plus）
+  # 默认运行
   python run.py batch
 
   # 指定模型
+  python run.py batch --model qwen3.6-plus-preview-free
   python run.py batch --model gemini-3.1-flash-lite-preview
+  python run.py batch --model MiniMax-M2.7
 
   # dry-run 测试（不调用 API，验证完整流程）
   python run.py batch --dry-run --max-docs 10
-
-  # 指定自定义人类文本文件
-  python run.py batch --source data/human_texts_10k.jsonl
 
   # -------- 查看支持的模型 --------
   python run.py list-models
 
   # -------- 单文本测试 --------
-  # 请使用 run_single.py
+  # 请使用 scripts/run_single.py
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
-from pathlib import Path
 
 from src.config import DatasetConfig, SUPPORTED_MODELS
-from src.pipeline import DatasetPipeline
 from src.utils import get_logger
 
 logger = get_logger("run")
@@ -45,23 +42,13 @@ def build_parser() -> argparse.ArgumentParser:
     # -------- batch 子命令 --------
     bp = subparsers.add_parser("batch", help="批量构建数据集")
     bp.add_argument(
-        "--model", type=str, default="qwen3.5-plus",
-        help=f"改写模型 (默认: qwen3.5-plus)",
-    )
-    bp.add_argument(
-        "--source", type=str, default="data/human_texts_1k.jsonl",
-        help="预采样人类文本 JSONL 文件路径",
-    )
-    bp.add_argument(
-        "--output-dir", type=str, default="output",
-        help="输出目录 (默认: output/)",
+        "--model", type=str, default="MiniMax-M2.7",
+        help="改写模型 (默认: MiniMax-M2.7)",
     )
     bp.add_argument(
         "--max-docs", type=int, default=None,
         help="最多处理 N 篇文档（调试用）",
     )
-    bp.add_argument("--concurrent", type=int, default=8, help="并发请求数")
-    bp.add_argument("--seed", type=int, default=42, help="随机种子")
     bp.add_argument("--dry-run", action="store_true", help="不调用 API")
 
     # -------- list-models 子命令 --------
@@ -85,16 +72,10 @@ def list_models() -> None:
 
 async def run_batch(args: argparse.Namespace) -> None:
     """批量数据集构建。"""
-    source_tag = Path(args.source).stem
+    from src.pipeline import DatasetPipeline
 
     cfg = DatasetConfig(
-        source_path=args.source,
-        source_tag=source_tag,
-        output_dir=args.output_dir,
-        checkpoint_dir=f"{args.output_dir}/checkpoints",
         rewrite_model=args.model,
-        concurrent_requests=args.concurrent,
-        random_seed=args.seed,
     )
 
     logger.info("运行配置：")
@@ -103,6 +84,7 @@ async def run_batch(args: argparse.Namespace) -> None:
     logger.info(f"  ai_ratios         = {cfg.ai_ratios}")
     logger.info(f"  mixing_modes      = {cfg.mixing_modes}")
     logger.info(f"  concurrent        = {cfg.concurrent_requests}")
+    logger.info(f"  random_seed       = {cfg.random_seed}")
     logger.info(f"  dry_run           = {args.dry_run}")
 
     pipeline = DatasetPipeline(cfg)

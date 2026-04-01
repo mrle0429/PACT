@@ -143,15 +143,40 @@ def async_retry(
 # 健壮 JSON 解析（应对 LLM 输出噪声）
 # ---------------------------------------------------------------------------
 
+_JSON_VALID_ESCAPES = frozenset('"\\\/bfnrtu')
+
+
+def _fix_invalid_json_escapes(text: str) -> str:
+    """将 JSON 字符串中的非法反斜杠转义（如 LaTeX 的 \\omega）替换为双反斜杠，
+    使其成为合法的 JSON 字符串字面量。仅处理字符串内部的反斜杠。"""
+    result: list[str] = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == '\\' and i + 1 < len(text):
+            next_ch = text[i + 1]
+            if next_ch not in _JSON_VALID_ESCAPES:
+                # 非法转义：把单个 \ 补全为 \\
+                result.append('\\\\')
+            else:
+                result.append('\\')
+            i += 1
+        else:
+            result.append(ch)
+            i += 1
+    return ''.join(result)
+
+
 def extract_json_from_llm_response(text: str) -> dict[str, str]:
     """
     从 LLM 的原始输出中稳健地提取 JSON 对象。
 
     策略（按优先级）：
     1. 直接 json.loads
-    2. 提取 ```json ... ``` 代码块
-    3. 正则找第一个 { ... } 块
-    4. 抛出 ValueError
+    2. 修复非法 JSON 转义后再解析（处理含 LaTeX 反斜杠的输出）
+    3. 提取 ```json ... ``` 代码块
+    4. 正则找第一个 { ... } 块
+    5. 抛出 ValueError
     """
     # 1. 直接解析
     text = text.strip()
@@ -160,142 +185,39 @@ def extract_json_from_llm_response(text: str) -> dict[str, str]:
     except json.JSONDecodeError:
         pass
 
-    # 2. 代码块
+    # 2. 修复非法 JSON 反斜杠转义后重试（应对 LaTeX 等含 \omega \Sigma 的内容）
+    try:
+        return json.loads(_fix_invalid_json_escapes(text))
+    except json.JSONDecodeError:
+        pass
+
+    # 3. 代码块
     code_block = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if code_block:
         try:
             return json.loads(code_block.group(1))
         except json.JSONDecodeError:
-            pass
+            try:
+                return json.loads(_fix_invalid_json_escapes(code_block.group(1)))
+            except json.JSONDecodeError:
+                pass
 
-    # 3. 首个 { ... } 对象（贪婪，允许嵌套）
+    # 4. 首个 { ... } 对象（贪婪，允许嵌套）
     brace_match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
     if brace_match:
         try:
             return json.loads(brace_match.group(0))
         except json.JSONDecodeError:
-            pass
+            try:
+                return json.loads(_fix_invalid_json_escapes(brace_match.group(0)))
+            except json.JSONDecodeError:
+                pass
 
     raise ValueError(f"无法从 LLM 响应中解析出 JSON。原文片段:\n{text[:500]}")
 
-
-# ---------------------------------------------------------------------------
-# 成本估算（仅估算，非精确）
-# ---------------------------------------------------------------------------
 
 AVG_CHARS_PER_TOKEN = 4.0   # 英文平均值
 
 def estimate_token_count(text: str) -> int:
     """粗略估计 token 数（无需加载 tiktoken）。"""
     return max(1, int(len(text) / AVG_CHARS_PER_TOKEN))
-
-
-# Cost per 1M tokens (input / output), USD
-_COST_TABLE: dict[str, tuple[float, float]] = {
-    "gpt-4o-mini":                  (0.15, 0.60),
-    "gpt-4o":                       (2.50, 10.00),
-    "claude-3-5-haiku-20241022":    (0.80, 4.00),
-    "claude-3-5-sonnet-20241022":   (3.00, 15.00),
-    "gemini-2.0-flash":             (0.10, 0.40),
-    "MiniMax-M2.5":                 (0.10, 1.10),
-    "MiniMax-M2.5-highspeed":       (0.10, 1.10),
-}
-
-# Qwen 分档价格（单位：CNY / 1M tokens），按单次请求输入 token 分档
-# 汇率固定使用 1 USD = 7 CNY
-_CNY_PER_USD = 7.0
-_QWEN35_PLUS_TIERS_CNY: list[tuple[int, float, float]] = [
-    # (max_input_tokens, input_price_cny_per_1m, output_price_cny_per_1m)
-    (128_000, 0.8, 4.8),
-    (256_000, 2.0, 12.0),
-    (1_000_000, 4.0, 24.0),
-]
-_QWEN35_FLASH_TIERS_CNY: list[tuple[int, float, float]] = [
-    # (max_input_tokens, input_price_cny_per_1m, output_price_cny_per_1m)
-    (128_000, 0.2, 2.0),
-    (256_000, 0.8, 8.0),
-    (1_000_000, 1.2, 12.0),
-]
-
-
-def _qwen35_plus_rates_usd(input_tokens: int) -> tuple[float, float]:
-    """按输入 token 所处分档返回 qwen3.5-plus 的 (输入单价, 输出单价), USD/1M。"""
-    for max_inp, inp_cny, out_cny in _QWEN35_PLUS_TIERS_CNY:
-        if input_tokens <= max_inp:
-            return inp_cny / _CNY_PER_USD, out_cny / _CNY_PER_USD
-    inp_cny, out_cny = _QWEN35_PLUS_TIERS_CNY[-1][1], _QWEN35_PLUS_TIERS_CNY[-1][2]
-    return inp_cny / _CNY_PER_USD, out_cny / _CNY_PER_USD
-
-
-def _qwen35_flash_rates_usd(input_tokens: int) -> tuple[float, float]:
-    """按输入 token 所处分档返回 qwen3.5-flash 的 (输入单价, 输出单价), USD/1M。"""
-    for max_inp, inp_cny, out_cny in _QWEN35_FLASH_TIERS_CNY:
-        if input_tokens <= max_inp:
-            return inp_cny / _CNY_PER_USD, out_cny / _CNY_PER_USD
-    inp_cny, out_cny = _QWEN35_FLASH_TIERS_CNY[-1][1], _QWEN35_FLASH_TIERS_CNY[-1][2]
-    return inp_cny / _CNY_PER_USD, out_cny / _CNY_PER_USD
-
-
-_QWEN35_FLASH_MODEL_IDS = {"qwen3.5-flash", "qwen3.5-flash-2026-02-23"}
-
-
-def estimate_request_cost_usd(
-    model_id: str,
-    input_tokens: int,
-    output_tokens: int,
-) -> float | None:
-    """按单次请求 token 估算费用（USD），未知模型返回 None。"""
-    if model_id == "qwen3.5-plus":
-        inp_rate, out_rate = _qwen35_plus_rates_usd(input_tokens)
-    elif model_id in _QWEN35_FLASH_MODEL_IDS:
-        inp_rate, out_rate = _qwen35_flash_rates_usd(input_tokens)
-    else:
-        if model_id not in _COST_TABLE:
-            return None
-        inp_rate, out_rate = _COST_TABLE[model_id]
-    return input_tokens / 1_000_000 * inp_rate + output_tokens / 1_000_000 * out_rate
-
-
-def estimate_cost_usd(
-    model_id: str,
-    total_input_tokens: int,
-    total_output_tokens: int,
-) -> float:
-    """返回预估费用（美元）。"""
-    detail = estimate_cost_breakdown_usd(model_id, total_input_tokens, total_output_tokens)
-    if detail is None:
-        return -1.0
-    return detail["total_cost_usd"]
-
-
-def estimate_cost_breakdown_usd(
-    model_id: str,
-    total_input_tokens: int,
-    total_output_tokens: int,
-) -> dict[str, float] | None:
-    """
-    返回费用分解（输入/输出/总计），未知模型返回 None。
-
-    注意：
-    - qwen3.5-plus / qwen3.5-flash 为分档计费，
-      该函数在聚合 token 上估算时会按“总输入 token 对应分档”近似。
-    - 更精确的估算应逐请求调用 estimate_request_cost_usd 后累加。
-    """
-    if model_id == "qwen3.5-plus":
-        inp_cost, out_cost = _qwen35_plus_rates_usd(total_input_tokens)
-    elif model_id in _QWEN35_FLASH_MODEL_IDS:
-        inp_cost, out_cost = _qwen35_flash_rates_usd(total_input_tokens)
-    else:
-        if model_id not in _COST_TABLE:
-            return None
-        inp_cost, out_cost = _COST_TABLE[model_id]
-
-    input_cost_usd = total_input_tokens / 1_000_000 * inp_cost
-    output_cost_usd = total_output_tokens / 1_000_000 * out_cost
-    return {
-        "input_rate_per_1m": inp_cost,
-        "output_rate_per_1m": out_cost,
-        "input_cost_usd": input_cost_usd,
-        "output_cost_usd": output_cost_usd,
-        "total_cost_usd": input_cost_usd + output_cost_usd,
-    }

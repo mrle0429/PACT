@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import json
-import os
-import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -13,20 +11,6 @@ from typing import Any
 from .utils import get_logger
 
 logger = get_logger(__name__)
-
-
-def record_id_to_variant_key(record_id: str) -> str:
-    """
-    将 record_id 归一化为“忽略 mode”的变体键。
-    例如: arxiv_2408.17298_r80_block -> arxiv_2408.17298_r80
-    """
-    rid = str(record_id)
-    if rid.endswith("_block"):
-        return rid[:-6]
-    if rid.endswith("_scatter"):
-        return rid[:-8]
-    return rid
-
 
 # ---------------------------------------------------------------------------
 # 输出记录数据类（扁平化结构）
@@ -157,7 +141,6 @@ class CheckpointManager:
                     "total_source_docs_processed": 0,
                     "api_input_tokens": 0,
                     "api_output_tokens": 0,
-                    "api_estimated_cost_usd": 0.0,
                 },
             }
 
@@ -170,7 +153,6 @@ class CheckpointManager:
                 stats.setdefault("total_written", 0)
                 stats.setdefault("api_input_tokens", 0)
                 stats.setdefault("api_output_tokens", 0)
-                stats.setdefault("api_estimated_cost_usd", 0.0)
                 state.setdefault("completed_ids", [])
                 state.setdefault("completed_source_ids", [])
                 # 向后兼容：旧 checkpoint 缺失该统计时，按 completed_source_ids 重建
@@ -192,9 +174,7 @@ class CheckpointManager:
         tmp.replace(self._path)
 
     def is_completed(self, record_id: str) -> bool:
-        if record_id in self._completed_set:
-            return True
-        return record_id_to_variant_key(record_id) in self._completed_variant_key_set
+        return record_id in self._completed_set
 
     def mark_completed(
         self,
@@ -202,12 +182,10 @@ class CheckpointManager:
         source_doc_id: str = "",
         input_tokens: int = 0,
         output_tokens: int = 0,
-        estimated_cost_usd: float = 0.0,
     ) -> None:
         if record_id not in self._completed_set:
             self._state["completed_ids"].append(record_id)
             self._completed_set.add(record_id)
-            self._completed_variant_key_set.add(record_id_to_variant_key(record_id))
             if source_doc_id and source_doc_id not in self._completed_source_set:
                 self._state["completed_source_ids"].append(source_doc_id)
                 self._completed_source_set.add(source_doc_id)
@@ -215,7 +193,6 @@ class CheckpointManager:
             self._state["stats"]["total_written"] += 1
             self._state["stats"]["api_input_tokens"] += input_tokens
             self._state["stats"]["api_output_tokens"] += output_tokens
-            self._state["stats"]["api_estimated_cost_usd"] += estimated_cost_usd
             self._save()
 
     @property
@@ -224,14 +201,6 @@ class CheckpointManager:
         if not hasattr(self, "_completed_id_set"):
             self._completed_id_set: set[str] = set(self._state["completed_ids"])
         return self._completed_id_set
-
-    @property
-    def _completed_variant_key_set(self) -> set:
-        if not hasattr(self, "_completed_variant_set"):
-            self._completed_variant_set: set[str] = {
-                record_id_to_variant_key(rid) for rid in self._state["completed_ids"]
-            }
-        return self._completed_variant_set
 
     @property
     def _completed_source_set(self) -> set:

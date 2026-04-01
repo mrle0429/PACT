@@ -45,3 +45,6 @@ htmlcov/
 
 # ── kagglehub 缓存 ───────────────────────────────────────────
 ~/.cache/kagglehub/
+
+logs/
+analysis/*.png

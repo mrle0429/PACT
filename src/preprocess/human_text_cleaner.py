@@ -18,7 +18,7 @@ from typing import Any
 
 import pysbd
 
-from .utils import get_logger
+from ..utils import get_logger
 
 logger = get_logger(__name__)
 

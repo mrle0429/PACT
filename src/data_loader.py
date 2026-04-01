@@ -1,7 +1,7 @@
 """
 数据加载模块 — 从预采样的 JSONL 文件加载人类文本。
 
-输入格式（由 sample_human_texts.py 生成）：
+输入格式（由 scripts/sample_human_texts.py 生成）：
   {"id": "arxiv_0902.3253", "text": "...", "sentence_count": 12}
 
 """
@@ -57,7 +57,7 @@ def load_human_texts(
     """
     从预采样 JSONL 文件加载人类文本。
 
-    数据已在采样阶段 (sample_human_texts.py) 完成以下处理：
+    数据已在采样阶段 (scripts/sample_human_texts.py) 完成以下处理：
       - 文本清洗（换行符归一化、LaTeX 残留清理）
       - 质量过滤（句子数 / 字符数范围）
       - 无放回抽样 + 去重

@@ -4,7 +4,7 @@
 
 用法：
   1. 修改 "用户参数" 区域的变量
-  2. 运行: python run_single.py
+  2. 运行: python scripts/run_single.py
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -43,8 +43,8 @@ MODES = ["random_scatter"]
 
 # 改写模型
 # 可选（见 src/config.py: SUPPORTED_MODELS）:
-#       qwen3.5-plus, MiniMax-M2.5, gemini-3.1-flash-lite-preview
-MODEL = "qwen3.5-flash"
+#       MiniMax-M2.7, llama4-fast:latest, qwen3.6-plus-preview-free, qwen3.5-plus, gemini-3.1-flash-lite-preview
+MODEL = "MiniMax-M2.7"
 
 # dry-run 模式：True = 不调 API，用原句占位（测试流程）
 DRY_RUN = False
@@ -56,7 +56,7 @@ LANGUAGE = "English"
 SEED = 42
 
 # 输出文件路径（设为 None 则不保存，仅打印）
-OUTPUT_FILE = "output/single_test.jsonl"
+OUTPUT_FILE = str(PROJECT_ROOT / "output" / "single_test.jsonl")
 
 # ═══════════════════════════════════════════════════════════════════════════
 #                         以下无需修改
@@ -77,7 +77,7 @@ async def run(
     执行单文本混合改写测试。
 
     也可在其他脚本中 import 调用：
-        from run_single import run
+        from scripts.run_single import run
         import asyncio
         asyncio.run(run(text="...", ratios=[0.4], dry_run=False))
     """

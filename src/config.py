@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -19,7 +20,7 @@ load_dotenv()
 @dataclass
 class ModelConfig:
     """单个 LLM 模型的调用参数。"""
-    provider: Literal["openai", "anthropic", "gemini", "minimax", "dashscope"]
+    provider: Literal["openai", "anthropic", "gemini", "minimax", "dashscope", "deepseek", "doubao", "ollama", "openrouter"]
     model_id: str
     temperature: float = 0.7
     max_output_tokens: int = 2048
@@ -27,6 +28,13 @@ class ModelConfig:
 
 
 SUPPORTED_MODELS: dict[str, ModelConfig] = {
+    # --- Ollama / Llama 4（本地 HTTP API）---
+    "llama4-fast:latest": ModelConfig(
+        provider="ollama",
+        model_id="llama4-fast:latest",
+        temperature=0.2,
+        requests_per_minute=30,
+    ),
 
     "gemini-3.1-flash-lite-preview": ModelConfig(
         provider="gemini",
@@ -35,9 +43,9 @@ SUPPORTED_MODELS: dict[str, ModelConfig] = {
         requests_per_minute=120,
     ),
     # --- MiniMax（Anthropic API 兼容）---
-    "MiniMax-M2.5": ModelConfig(
+    "MiniMax-M2.7": ModelConfig(
         provider="minimax",
-        model_id="MiniMax-M2.5",
+        model_id="MiniMax-M2.7",
         temperature=0.7,
         requests_per_minute=60,
     ),
@@ -45,7 +53,7 @@ SUPPORTED_MODELS: dict[str, ModelConfig] = {
     "qwen3.5-plus": ModelConfig(
         provider="dashscope",
         model_id="qwen3.5-plus",
-        temperature=0.7,
+        temperature=0.1,
         requests_per_minute=60,
     ),
     "qwen3.5-flash": ModelConfig(
@@ -54,52 +62,58 @@ SUPPORTED_MODELS: dict[str, ModelConfig] = {
         temperature=0.7,
         requests_per_minute=60,
     ),
+    # --- OpenRouter / Qwen 3.6（OpenAI API 兼容）---
+    "qwen3.6-plus-preview-free": ModelConfig(
+        provider="openrouter",
+        model_id="qwen/qwen3.6-plus-preview:free",
+        temperature=0.1,
+        requests_per_minute=60,
+    ),
+    # --- DeepSeek（OpenAI API 兼容）---
+    "DeepSeek-V3.2": ModelConfig(
+        provider="deepseek",
+        model_id="deepseek-chat",
+        temperature=0.7
+    ),
+    # --- 豆包 / Doubao（火山方舟 Ark，OpenAI API 兼容）---
+    "doubao-seed-2-0-pro": ModelConfig(
+        provider="doubao",
+        model_id="doubao-seed-2-0-pro-260215",
+        temperature=0.7,
+        requests_per_minute=60,
+    ),
 }
 
 
-# ---------------------------------------------------------------------------
-# 数据集生成配置
-# ---------------------------------------------------------------------------
-
 @dataclass
 class DatasetConfig:
-    """数据集构建的核心超参数。"""
+    """
+    数据集构建配置。
+    """
 
-    # --- 数据源（预采样 JSONL）---
-    source_path: str = "data/human_texts_10k.jsonl"
-    source_tag: str = "human_10k"
-
-    # --- AI 浓度档位 ---
-    # 0.0 = 纯人类基线, 1.0 = 全AI改写
-    ai_ratios: list[float] = field(
-        default_factory=lambda: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-    )
-
-    # --- 混合模式 ---
-    mixing_modes: list[str] = field(
-        default_factory=lambda: ["block_replace", "random_scatter"]
-    )
-    # 文档级模式池：每篇文档仅使用一种模式；在数据集内尽量均衡分配（两种模式时约 1:1）
-
-    # --- LLM 改写 ---
-    rewrite_model: str = "qwen3.5-plus"   # 使用的模型 key
-    max_retries: int = 3                 # API 调用失败最大重试次数
-    retry_wait_seconds: float = 5.0
-    concurrent_requests: int = 8         # 并发 API 请求数
-
-    # --- 标签计算 ---
-    # block_replace 用 LIR（Token 长度占比）
-    # random_scatter 同时计算 Jaccard 距离和余弦距离
-    tokenizer_for_lir: str = "cl100k_base"   # tiktoken 编码器名
-    ngram_n: int = 2                          # 余弦距离的 n-gram 大小
-
-    # --- 输出 ---
+    # --- 运行时可变参数 ---
+    rewrite_model: str
+    source_path: str = "data/human_texts_1k.cleaned.jsonl"
     output_dir: str = "output"
-    output_filename: str = "mixed_dataset.jsonl"
-    checkpoint_dir: str = "output/checkpoints"
-
-    # --- 复现性 ---
+    concurrent_requests: int = 8
     random_seed: int = 42
+
+    # --- 由运行时参数派生 ---
+    source_tag: str = field(init=False)
+    checkpoint_dir: str = field(init=False)
+
+    # --- 当前工作流固定约定 ---
+    ai_ratios: list[float] = field(default_factory=lambda: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], init=False)
+    mixing_modes: list[str] = field(default_factory=lambda: ["block_replace", "random_scatter"], init=False)
+    max_retries: int = field(default=3, init=False)
+    retry_wait_seconds: float = field(default=5.0, init=False)
+    tokenizer_for_lir: str = field(default="cl100k_base", init=False)
+    ngram_n: int = field(default=2, init=False)
+    output_filename: str = field(default="mixed_dataset.jsonl", init=False)
+
+    def __post_init__(self) -> None:
+        self.source_tag = Path(self.source_path).stem
+        self.checkpoint_dir = str(Path(self.output_dir) / "checkpoints")
 
     # ---------------------------------------------------------------------------
     # API Key（从环境变量读取，不硬编码）
@@ -123,6 +137,30 @@ class DatasetConfig:
     @property
     def dashscope_api_key(self) -> str:
         return os.getenv("DASHSCOPE_API_KEY", "")
+
+    @property
+    def deepseek_api_key(self) -> str:
+        return os.getenv("DEEPSEEK_API_KEY", "")
+
+    @property
+    def ark_api_key(self) -> str:
+        return os.getenv("ARK_API_KEY", "")
+
+    @property
+    def ollama_base_url(self) -> str:
+        return os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/api")
+
+    @property
+    def ollama_keep_alive(self) -> str:
+        return os.getenv("OLLAMA_KEEP_ALIVE", "5m")
+
+    @property
+    def openrouter_api_key(self) -> str:
+        return os.getenv("OPENROUTER_API_KEY", "")
+
+    @property
+    def openrouter_base_url(self) -> str:
+        return os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 
     def get_model_config(self) -> ModelConfig:
         if self.rewrite_model not in SUPPORTED_MODELS:

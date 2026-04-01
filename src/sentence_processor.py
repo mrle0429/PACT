@@ -1,10 +1,16 @@
 """
-句子处理模块：分句、索引选择（Block / Scatter）、回填。
+句子处理模块：分句、句子索引选择、混合文本回填。
+
+本模块只负责“文本到句子”这一层的纯本地处理：
+- 分句
+- 选择哪些句子要被改写
+- 将改写结果安全回填到原句列表
+
 """
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 import pysbd
@@ -180,61 +186,3 @@ def enumerate_variants(
             variants.append(sel)
 
     return variants
-
-
-# ---------------------------------------------------------------------------
-# Prompt 构建辅助
-# ---------------------------------------------------------------------------
-
-def build_numbered_context(sentences: list[str]) -> str:
-    """
-    将句子列表格式化为带序号的上下文字符串，便于写入 Prompt。
-
-    输出示例：
-        [1] The sky is blue.
-        [2] Water is wet.
-    """
-    return "\n".join(f"[{i + 1}] {s}" for i, s in enumerate(sentences))
-
-
-def build_rewrite_prompt(
-    sentences: list[str],
-    selected_indices: list[int],
-    language_hint: str = "English",
-) -> str:
-    """
-    构建 Diff-based Editing Prompt。
-
-    设计原则：
-    - 完整上下文保证语义连贯性
-    - 严格限制输出为 JSON Diff，大幅降低输出 Token 成本
-    - 明确禁止改动未选中句子
-
-    Args:
-        sentences:        完整句子列表
-        selected_indices: 需要改写的句子下标（0-indexed）
-        language_hint:    目标语言提示
-    """
-    numbered_context = build_numbered_context(sentences)
-    # 转为 1-indexed 供模型使用
-    target_indices_str = ", ".join(str(i + 1) for i in selected_indices)
-    example_keys = ", ".join(f'"{i + 1}": "<rewritten>"' for i in selected_indices[:2])
-
-    prompt = f"""Below is a complete article provided as background context:
-
-<context>
-{numbered_context}
-</context>
-
-You are a professional editor. Your task is to **polish ONLY the sentences numbered: {target_indices_str}**, while keeping all other sentences completely unchanged.
-
-Requirements:
-- Preserve the original meaning and factual content of each rewritten sentence.
-- Make the style and phrasing sound natural and fluent in {language_hint}.
-- Do NOT output the full article — output ONLY a JSON object mapping sentence numbers to their rewritten versions.
-- Do NOT include any explanation, commentary, or extra text.
-
-Output format (strict JSON, sentence numbers as string keys):
-{{{example_keys}, ...}}"""
-
-    return prompt

@@ -1,6 +1,4 @@
-# AI 混合文本数据集构建工具
-
-按 `dataset_plan.md` 的流程，生成带连续标签的人机混合文本数据集。
+# AI人类混合文本数据集构建工具
 
 ## 快速开始
 
@@ -27,6 +25,20 @@ cp .env.example .env
 python run.py list-models
 ```
 
+## 目录结构
+
+```text
+ob/
+├── run.py              # 主入口：批量构建、模型列表
+├── src/                # 核心实现
+├── scripts/            # 采样、清洗、单条调试、分析脚本
+├── docs/               # 流程文档
+├── data/               # 原始与清洗后的数据
+├── output/             # 数据集输出、checkpoint、API 日志
+├── analysis/           # 图表等分析产物
+└── logs/               # 本地运行日志
+```
+
 ## 运行方式
 
 ### 批量构建（batch）
@@ -35,11 +47,12 @@ python run.py list-models
 # dry-run（不调用 API）
 python run.py batch --dry-run --max-docs 10
 
-# 正式运行（默认模型：qwen3.5-plus）
+# 正式运行（默认模型：MiniMax-M2.7）
 python run.py batch
 
 # 指定模型
-python run.py batch --model gemini-3.1-flash-lite-preview
+python run.py batch --model llama4-fast:latest
+python run.py batch --model MiniMax-M2.7
 ```
 
 常用参数：
@@ -52,24 +65,19 @@ python run.py batch --model gemini-3.1-flash-lite-preview
 - `--concurrent`：并发请求数
 - `--seed`：随机种子
 
-### 单文本测试（single）
+### 单文本测试
 
 ```bash
-# 直接传文本
-python run.py single --text "A. B. C. D. E."
-
-# 指定参数
-python run.py single --text "..." --ratio 0.6 --mode random_scatter --model qwen3.5-plus
-
-# dry-run
-python run.py single --text "..." --dry-run
+# 直接修改脚本顶部参数后运行
+python scripts/run_single.py
 ```
 
-也可以直接改 `run_single.py` 里的参数后运行：
+更多数据准备与分析脚本：
 
-```bash
-python run_single.py
-```
+- 采样：`python scripts/sample_human_texts.py`
+- 清洗：`python scripts/clean_human_texts.py --input data/human_texts_10k.jsonl --output data/human_texts_10k.cleaned.jsonl`
+- 质量检查：`python scripts/check_data_quality.py`
+- 比例分析图：`python scripts/plot_ratio_analysis.py`
 
 ## 输出文件
 
@@ -102,12 +110,44 @@ python run_single.py
 
 - `target_ratio=0.0` 不调用 API，直接保留原文。
 - API 改写失败或覆盖不完整（返回句子数小于请求句子数）时，该样本会被跳过，不写入数据集。
-- `doc_ai_ratio_exact` 在标签计算阶段等同于 `lir`（写入记录时字段名为 `lir`）。
+
+## Ollama / Llama 4 接入
+
+- 默认模型：`MiniMax-M2.7`
+- 默认 Base URL：`http://127.0.0.1:11434/api`
+- 调用接口：`POST /api/chat`
+- 默认 `keep_alive`：`5m`
+- 默认关闭环境代理影响：`trust_env=False`
+
+如需覆盖本地默认值，可在 `.env` 中设置：
+
+```bash
+OLLAMA_BASE_URL=http://127.0.0.1:11434/api
+OLLAMA_KEEP_ALIVE=5m
+```
+
+## OpenRouter / Qwen 3.6 接入
+
+- 模型 key：`qwen3.6-plus-preview-free`
+- 实际 OpenRouter model id：`qwen/qwen3.6-plus-preview:free`
+- 接口基址：`https://openrouter.ai/api/v1`
+- 当前实现按 OpenRouter 要求开启 reasoning，但通过 `exclude=true` 不返回 reasoning 内容；同时优先请求 `json_object` 结构化输出
+
+在 `.env` 中配置：
+
+```bash
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+```
 
 ## 当前支持模型
 
+- `llama4-fast:latest`（Ollama / 原生 HTTP API）
+- `qwen3.6-plus-preview-free`（OpenRouter / OpenAI-compatible）
 - `qwen3.5-plus`（DashScope / OpenAI-compatible）
-- `MiniMax-M2.5`（Anthropic-compatible）
+- `MiniMax-M2.7`（Anthropic-compatible，thinking disabled，利用被动 prompt cache）
 - `gemini-3.1-flash-lite-preview`（google-genai）
 
 模型列表由 `src/config.py` 的 `SUPPORTED_MODELS` 决定。
+
+详细流程说明见 [`docs/dataset_plan.md`](/Volumes/Mac/Project/ob/docs/dataset_plan.md)。

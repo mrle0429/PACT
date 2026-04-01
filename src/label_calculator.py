@@ -1,12 +1,10 @@
 """
-标签精确计算模块（Step 4）。
+标签精确计算模块。
 
 三个互补指标对所有混合模式统一计算：
   - LIR (Token 占比)      — AI 句子 token 数 / 全文 token 数，直接度量 AI 浓度
   - Jaccard Distance       — 原文 vs 混合文本的词汇集合差异，度量词汇替换程度
   - Cosine Distance (n-gram) — 原文 vs 混合文本的 n-gram TF 向量距离，度量风格偏移
-
-doc_ai_ratio_exact 统一使用 LIR，因为它是最直接的 AI 内容占比度量。
 """
 from __future__ import annotations
 
@@ -184,7 +182,6 @@ def compute_labels(
 
     Returns:
         {
-            "doc_ai_ratio_exact": float,  # 核心回归目标（= LIR）
             "lir":                float,  # AI token 占比
             "jaccard_distance":   float,  # 词汇集合差异
             "cosine_distance":    float,  # n-gram 风格偏移
@@ -197,7 +194,6 @@ def compute_labels(
     cos_val = compute_cosine_distance(original_text, mixed_text, cfg.ngram_n)
 
     return {
-        "doc_ai_ratio_exact": lir_val,  # 统一用 LIR 作为所有模式的主标签
         "lir": lir_val,
         "jaccard_distance": jac_val,
         "cosine_distance": cos_val,

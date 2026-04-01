@@ -16,12 +16,13 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # ---------------------------------------------------------------------------
 # 参数（与 pipeline 默认配置保持一致）
 # ---------------------------------------------------------------------------
-CHECKPOINT_PATH = Path("output/checkpoints/run_qwen3.5-flash_human_texts_1k_932c58e5c5.json")
-SOURCE_JSONL   = Path("data/human_texts_1k.jsonl")
+CHECKPOINT_PATH = PROJECT_ROOT / "output" / "checkpoints" / "run_DeepSeek-V3.2_human_texts_1k.cleaned_3bfe49e14a.json"
+SOURCE_JSONL   = PROJECT_ROOT / "data" / "human_texts_1k.jsonl"
 RANDOM_SEED    = 42
 MIXING_MODES   = ["block_replace", "random_scatter"]   # 顺序与 config 默认值相同
 
