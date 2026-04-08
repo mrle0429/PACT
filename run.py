@@ -10,6 +10,7 @@
   # 指定模型
   python run.py batch --model qwen3.6-plus-preview-free
   python run.py batch --model gemini-3.1-flash-lite-preview
+  python run.py batch --model gemma4
   python run.py batch --model MiniMax-M2.7
 
   # dry-run 测试（不调用 API，验证完整流程）

@@ -52,6 +52,7 @@ python run.py batch
 
 # 指定模型
 python run.py batch --model llama4-fast:latest
+python run.py batch --model gemma4
 python run.py batch --model MiniMax-M2.7
 ```
 
@@ -111,13 +112,14 @@ python scripts/run_single.py
 - `target_ratio=0.0` 不调用 API，直接保留原文。
 - API 改写失败或覆盖不完整（返回句子数小于请求句子数）时，该样本会被跳过，不写入数据集。
 
-## Ollama / Llama 4 接入
+## Ollama 接入
 
 - 默认模型：`MiniMax-M2.7`
 - 默认 Base URL：`http://127.0.0.1:11434/api`
 - 调用接口：`POST /api/chat`
 - 默认 `keep_alive`：`5m`
 - 默认关闭环境代理影响：`trust_env=False`
+- `gemma4` 通过 `think=false` 显式关闭思考输出
 
 如需覆盖本地默认值，可在 `.env` 中设置：
 
@@ -143,6 +145,7 @@ OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 ## 当前支持模型
 
 - `llama4-fast:latest`（Ollama / 原生 HTTP API）
+- `gemma4`（Ollama / 原生 HTTP API，thinking disabled）
 - `qwen3.6-plus-preview-free`（OpenRouter / OpenAI-compatible）
 - `qwen3.5-plus`（DashScope / OpenAI-compatible）
 - `MiniMax-M2.7`（Anthropic-compatible，thinking disabled，利用被动 prompt cache）

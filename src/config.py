@@ -28,11 +28,17 @@ class ModelConfig:
 
 
 SUPPORTED_MODELS: dict[str, ModelConfig] = {
-    # --- Ollama / Llama 4（本地 HTTP API）---
+    # --- Ollama（本地 HTTP API）---
     "llama4-fast:latest": ModelConfig(
         provider="ollama",
         model_id="llama4-fast:latest",
         temperature=0.2,
+        requests_per_minute=30,
+    ),
+    "gemma4": ModelConfig(
+        provider="ollama",
+        model_id="gemma4",
+        temperature=0.7,
         requests_per_minute=30,
     ),
 

@@ -43,7 +43,7 @@ MODES = ["random_scatter"]
 
 # 改写模型
 # 可选（见 src/config.py: SUPPORTED_MODELS）:
-#       MiniMax-M2.7, llama4-fast:latest, qwen3.6-plus-preview-free, qwen3.5-plus, gemini-3.1-flash-lite-preview
+#       MiniMax-M2.7, llama4-fast:latest, gemma4, qwen3.6-plus-preview-free, qwen3.5-plus, gemini-3.1-flash-lite-preview
 MODEL = "MiniMax-M2.7"
 
 # dry-run 模式：True = 不调 API，用原句占位（测试流程）

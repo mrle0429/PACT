@@ -7,7 +7,7 @@ from ..config import DatasetConfig, ModelConfig
 
 class OllamaRewriter(BaseLLMRewriter):
     """
-    使用 Ollama 原生 HTTP API 调用本地/隧道映射的 llama4-fast 模型。
+    使用 Ollama 原生 HTTP API 调用本地/隧道映射模型。
     """
 
     def __init__(
@@ -37,20 +37,21 @@ class OllamaRewriter(BaseLLMRewriter):
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": user_prompt})
-        response = await self._client.post(
-            "/chat",
-            json={
-                "model": self.model_cfg.model_id,
-                "messages": messages,
-                "options": {
-                    "temperature": self.model_cfg.temperature,
-                    "num_predict": self.model_cfg.max_output_tokens,
-                },
-                "format": "json",
-                "keep_alive": self.cfg.ollama_keep_alive,
-                "stream": False,
+        payload = {
+            "model": self.model_cfg.model_id,
+            "messages": messages,
+            "options": {
+                "temperature": self.model_cfg.temperature,
+                "num_predict": self.model_cfg.max_output_tokens,
             },
-        )
+            "format": "json",
+            "keep_alive": self.cfg.ollama_keep_alive,
+            "stream": False,
+        }
+        if self.model_cfg.model_id.startswith("gemma4"):
+            payload["think"] = False
+
+        response = await self._client.post("/chat", json=payload)
         response.raise_for_status()
 
         payload = response.json()
