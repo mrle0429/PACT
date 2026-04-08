@@ -54,6 +54,7 @@ python run.py batch
 python run.py batch --model llama4-fast:latest
 python run.py batch --model gemma4
 python run.py batch --model MiniMax-M2.7
+python run.py batch --model claude-haiku-4.5
 ```
 
 常用参数：
@@ -142,11 +143,16 @@ OPENROUTER_API_KEY=sk-or-...
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 ```
 
+同一个 OpenRouter 配置也适用于：
+
+- `claude-haiku-4.5` -> `anthropic/claude-haiku-4.5`
+
 ## 当前支持模型
 
 - `llama4-fast:latest`（Ollama / 原生 HTTP API）
 - `gemma4`（Ollama / 原生 HTTP API，thinking disabled）
 - `qwen3.6-plus-preview-free`（OpenRouter / OpenAI-compatible）
+- `claude-haiku-4.5`（OpenRouter / OpenAI-compatible）
 - `qwen3.5-plus`（DashScope / OpenAI-compatible）
 - `MiniMax-M2.7`（Anthropic-compatible，thinking disabled，利用被动 prompt cache）
 - `gemini-3.1-flash-lite-preview`（google-genai）

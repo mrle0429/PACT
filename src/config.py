@@ -75,6 +75,13 @@ SUPPORTED_MODELS: dict[str, ModelConfig] = {
         temperature=0.1,
         requests_per_minute=60,
     ),
+    # --- OpenRouter / Claude Haiku 4.5（OpenAI API 兼容）---
+    "claude-haiku-4.5": ModelConfig(
+        provider="openrouter",
+        model_id="anthropic/claude-haiku-4.5",
+        temperature=0.1,
+        requests_per_minute=60,
+    ),
     # --- DeepSeek（OpenAI API 兼容）---
     "DeepSeek-V3.2": ModelConfig(
         provider="deepseek",
