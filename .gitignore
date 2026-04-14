@@ -48,3 +48,6 @@ htmlcov/
 
 logs/
 analysis/*.png
+
+analysis/
+.cache/
