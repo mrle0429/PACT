@@ -1,8 +1,11 @@
 """
 数据加载模块 — 从预采样的 JSONL 文件加载人类文本。
 
-输入格式（由 scripts/sample_human_texts.py 生成）：
-  {"id": "arxiv_0902.3253", "text": "...", "sentence_count": 12}
+预采样JSONL文件包含以下字段：
+    - id: 文档唯一标识符（通常包含来源前缀）
+    - text: 文本内容
+    - sentence_count: 句子数量
+    - fixed_mixing_mode: 固定混合模式(Bolock Replace / Random Scatter)
 
 """
 from __future__ import annotations
@@ -12,6 +15,7 @@ import random
 from dataclasses import dataclass
 from pathlib import Path
 
+from .sentence_processor import MixingMode
 from .utils import get_logger
 
 logger = get_logger(__name__)
@@ -29,6 +33,7 @@ class SourceDocument:
     domain: str
     source_dataset: str
     sentence_count: int = 0
+    fixed_mixing_mode: MixingMode | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +53,7 @@ _PREFIX_META: dict[str, tuple[str, str]] = {
 # ---------------------------------------------------------------------------
 
 def load_human_texts(
-    path: str | Path = "data/human_texts_10k.jsonl",
+    path: str | Path = "data/human_texts_1k.cleaned.jsonl",
     *,
     shuffle: bool = True,
     max_count: int | None = None,
@@ -91,6 +96,7 @@ def load_human_texts(
             doc_id = str(record.get("id", f"line_{lineno}"))
             text = record.get("text", "")
             sentence_count = record.get("sentence_count", 0)
+            fixed_mixing_mode = record.get("fixed_mixing_mode")
 
             if not text:
                 continue
@@ -105,6 +111,7 @@ def load_human_texts(
                 domain=domain,
                 source_dataset=source_ds,
                 sentence_count=sentence_count,
+                fixed_mixing_mode=fixed_mixing_mode,
             ))
 
     if shuffle:

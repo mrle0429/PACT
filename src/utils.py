@@ -87,6 +87,9 @@ _NON_RETRYABLE_ERROR_HINTS = (
     "model not found",
     "does not exist",
     "no such model",
+    "data_inspection_failed",
+    "internalerror.algo.datainspectionfailed",
+    "inappropriate content",
     "欠费",
     "余额不足",
     "配额不足",
@@ -216,8 +219,3 @@ def extract_json_from_llm_response(text: str) -> dict[str, str]:
     raise ValueError(f"无法从 LLM 响应中解析出 JSON。原文片段:\n{text[:500]}")
 
 
-AVG_CHARS_PER_TOKEN = 4.0   # 英文平均值
-
-def estimate_token_count(text: str) -> int:
-    """粗略估计 token 数（无需加载 tiktoken）。"""
-    return max(1, int(len(text) / AVG_CHARS_PER_TOKEN))

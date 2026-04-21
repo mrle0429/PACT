@@ -4,6 +4,7 @@
 三个互补指标对所有混合模式统一计算：
   - LIR (Token 占比)      — AI 句子 token 数 / 全文 token 数，直接度量 AI 浓度
   - Jaccard Distance       — 原文 vs 混合文本的词汇集合差异，度量词汇替换程度
+  - sentence-level Jaccard Distance — 仅对 AI 句子计算的平均词汇集合差异，度量 AI 句子质量
   - Cosine Distance (n-gram) — 原文 vs 混合文本的 n-gram TF 向量距离，度量风格偏移
 """
 from __future__ import annotations
@@ -13,6 +14,7 @@ import re
 from collections import Counter
 
 from .config import DatasetConfig
+from .sentence_processor import split_into_sentences
 
 
 # ---------------------------------------------------------------------------
@@ -29,31 +31,35 @@ def _normalize_words(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Token 计数（使用 tiktoken，fallback 到字符估算）
+# Token 计数
 # ---------------------------------------------------------------------------
 
 _encoder_cache: dict[str, object] = {}
 
 
 def _get_token_encoder(encoding_name: str):
-    """懒加载 tiktoken 编码器（带缓存），失败则返回 None。"""
+    """懒加载 tiktoken 编码器（带缓存），失败时直接抛异常。"""
     if encoding_name in _encoder_cache:
-        return _encoder_cache[encoding_name]
+        encoder = _encoder_cache[encoding_name]
+        if encoder is None:
+            raise RuntimeError(f"tiktoken 编码器不可用: {encoding_name}")
+        return encoder
     try:
         import tiktoken
         enc = tiktoken.get_encoding(encoding_name)
         _encoder_cache[encoding_name] = enc
         return enc
-    except Exception:
+    except Exception as exc:
         _encoder_cache[encoding_name] = None
-        return None
+        raise RuntimeError(
+            f"无法加载 tiktoken 编码器 '{encoding_name}'，"
+            "LIR token 统计要求精确计数，不能回退。"
+        ) from exc
 
 
 def count_tokens(text: str, encoder) -> int:
-    """统计文本 token 数。encoder 为 None 时退化为字符数 / 4。"""
-    if encoder is not None:
-        return len(encoder.encode(text))
-    return max(1, len(text) // 4)
+    """统计文本 token 数。"""
+    return len(encoder.encode(text))
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +133,39 @@ def compute_jaccard_distance(original_text: str, mixed_text: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# 指标三：余弦距离（基于 n-gram TF 向量）
+# 指标三：sentence-level Jaccard Distance（仅 AI 句子）
+# ---------------------------------------------------------------------------
+def compute_sentence_jaccard(
+    original_text: str,
+    mixed_text: str,
+    sentence_labels: list[int],
+) -> float | None:
+    """
+    仅对 sentence_labels == 1 的句子计算平均 Jaccard Distance。
+
+    若 original / mixed / labels 三者句子数无法安全对齐，则返回 None。
+    """
+    ai_indices = [idx for idx, label in enumerate(sentence_labels) if int(label) == 1]
+    if not ai_indices:
+        return 0.0
+
+    original_sentences = split_into_sentences(original_text)
+    mixed_sentences = split_into_sentences(mixed_text)
+
+    if len(original_sentences) != len(mixed_sentences) or len(original_sentences) != len(sentence_labels):
+        return None
+
+    scores = [
+        compute_jaccard_distance(original_sentences[idx], mixed_sentences[idx])
+        for idx in ai_indices
+    ]
+    if not scores:
+        return 0.0
+    return round(sum(scores) / len(scores), 6)
+
+
+# ---------------------------------------------------------------------------
+# 指标四：余弦距离（基于 n-gram TF 向量）
 # ---------------------------------------------------------------------------
 
 def _ngram_tf(text: str, n: int) -> Counter:
@@ -185,16 +223,20 @@ def compute_labels(
             "lir":                float,  # AI token 占比
             "jaccard_distance":   float,  # 词汇集合差异
             "cosine_distance":    float,  # n-gram 风格偏移
+            "sentence_jaccard":   float | None,  # AI 句级平均 Jaccard Distance
         }
     """
     mixed_text = " ".join(mixed_sentences)
+    sentence_labels = [1 if idx in set(ai_indices) else 0 for idx in range(len(mixed_sentences))]
 
     lir_val = compute_lir(ai_indices, mixed_sentences, cfg.tokenizer_for_lir)
     jac_val = compute_jaccard_distance(original_text, mixed_text)
     cos_val = compute_cosine_distance(original_text, mixed_text, cfg.ngram_n)
+    sent_jac_val = compute_sentence_jaccard(original_text, mixed_text, sentence_labels)
 
     return {
         "lir": lir_val,
         "jaccard_distance": jac_val,
         "cosine_distance": cos_val,
+        "sentence_jaccard": sent_jac_val,
     }

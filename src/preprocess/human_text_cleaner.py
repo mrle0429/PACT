@@ -61,6 +61,8 @@ class HumanTextCleanerConfig:
     drop_boilerplate_sentences: bool = True
     drop_natural_language_boilerplate: bool = False
     min_sentences_to_keep: int = 1
+    safe_quote_normalization: bool = False
+    require_stable_sentence_count: bool = True
 
 
 @dataclass
@@ -74,6 +76,8 @@ class RecordCleanResult:
     removed_sentences: int = 0
     removal_reasons: Counter[str] = field(default_factory=Counter)
     sentence_logs: list[dict[str, Any]] = field(default_factory=list)
+    normalization_reverted: bool = False
+    normalization_revert_reason: str = ""
 
 
 @dataclass
@@ -195,6 +199,7 @@ class HumanTextCleaner:
         candidate_sentences = self._split_sentences(normalized)
 
         kept_sentences: list[str] = []
+        kept_original_sentences: list[str] = []
         removal_reasons: Counter[str] = Counter()
         removed_sentences = 0
         sentence_logs: list[dict[str, Any]] = []
@@ -202,6 +207,8 @@ class HumanTextCleaner:
         for sentence in candidate_sentences:
             original_sentence = sentence.strip()
             prepared_sentence = sentence.strip()
+            if self.cfg.safe_quote_normalization:
+                prepared_sentence = self._normalize_sentence_surface(prepared_sentence)
             reason = self._classify_sentence_noise(prepared_sentence, source)
             if reason is not None and self.cfg.drop_boilerplate_sentences:
                 removal_reasons[reason] += 1
@@ -214,6 +221,7 @@ class HumanTextCleaner:
                 })
                 continue
             kept_sentences.append(prepared_sentence)
+            kept_original_sentences.append(original_sentence)
             sentence_logs.append({
                 "original_sentence": original_sentence,
                 "prepared_sentence": prepared_sentence,
@@ -223,6 +231,24 @@ class HumanTextCleaner:
 
         cleaned_text = self._finalize_text(" ".join(kept_sentences))
         cleaned_sentences = self._split_sentences(cleaned_text)
+        normalization_reverted = False
+        normalization_revert_reason = ""
+
+        expected_sentence_count = len(kept_sentences)
+        if (
+            self.cfg.safe_quote_normalization
+            and self.cfg.require_stable_sentence_count
+            and len(cleaned_sentences) != expected_sentence_count
+        ):
+            normalization_reverted = True
+            normalization_revert_reason = (
+                "safe_quote_normalization_changed_sentence_count"
+            )
+            cleaned_text = self._finalize_text(" ".join(kept_original_sentences))
+            cleaned_sentences = self._split_sentences(cleaned_text)
+            for item in sentence_logs:
+                if item["action"] == "kept":
+                    item["prepared_sentence"] = item["original_sentence"]
 
         cleaned_record = dict(record)
         cleaned_record["text"] = cleaned_text
@@ -240,6 +266,8 @@ class HumanTextCleaner:
             removed_sentences=removed_sentences,
             removal_reasons=removal_reasons,
             sentence_logs=sentence_logs,
+            normalization_reverted=normalization_reverted,
+            normalization_revert_reason=normalization_revert_reason,
         )
 
     def _normalize_text(self, text: str) -> str:
@@ -270,6 +298,14 @@ class HumanTextCleaner:
         if not text:
             return []
         return [s.strip() for s in self._segmenter.segment(text) if s.strip()]
+
+    def _normalize_sentence_surface(self, sentence: str) -> str:
+        text = sentence
+        text = text.replace("``", '"')
+        text = text.replace("''", '"')
+        text = text.replace("`", "'")
+        text = _MULTISPACE_RE.sub(" ", text)
+        return text.strip()
 
     def _classify_sentence_noise(self, sentence: str, source: str) -> str | None:
         sentence = sentence.strip()
@@ -336,6 +372,8 @@ class HumanTextCleaner:
             "source": source,
             "status": "skipped" if skipped else "written",
             "changed": result.changed,
+            "normalization_reverted": result.normalization_reverted,
+            "normalization_revert_reason": result.normalization_revert_reason,
             "original_sentence_count": result.original_sentence_count,
             "cleaned_sentence_count": result.cleaned_sentence_count,
             "removed_sentence_count": result.removed_sentences,

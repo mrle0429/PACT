@@ -1,5 +1,5 @@
 """
-数据集写入模块：JSONL 输出 + 断点续传（Checkpoint）支持。
+数据集写入模块：JSONL 输出 + 运行状态（checkpoint）支持。
 """
 from __future__ import annotations
 
@@ -36,6 +36,7 @@ class DatasetRecord:
           "sentence_labels":  [1, 0, 1, 0, 0, 0],
           "lir":              0.3822,
           "jaccard_distance": 0.2451,
+          "sentence_jaccard": 0.2113,
           "cosine_distance":  0.1893,
           "extra":            {}
         }
@@ -60,6 +61,7 @@ class DatasetRecord:
     sentence_labels: list[int] = field(default_factory=list)
     lir: float = 0.0
     jaccard_distance: float | None = None
+    sentence_jaccard: float | None = None
     cosine_distance: float | None = None
 
     # ---- 扩展（不同数据集来源的特有字段）----
@@ -82,10 +84,14 @@ class JsonlWriter:
     - 调用 close() 或作为上下文管理器使用
     """
 
-    def __init__(self, filepath: str | Path):
+    def __init__(self, filepath: str | Path, existing_ids: set[str] | None = None):
         self.filepath = Path(filepath)
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
-        self._existing_ids = load_existing_record_ids(self.filepath)
+        self._existing_ids = (
+            set(existing_ids)
+            if existing_ids is not None
+            else load_existing_record_ids(self.filepath)
+        )
         self._fh = self.filepath.open("a", encoding="utf-8")
         self._count = 0
         self._skipped_duplicates = 0
@@ -116,13 +122,16 @@ class JsonlWriter:
 
 
 # ---------------------------------------------------------------------------
-# 断点续传：Checkpoint 管理
+# 运行状态：Checkpoint 管理
 # ---------------------------------------------------------------------------
 
 class CheckpointManager:
     """
-    记录已完成的文档 ID，支持中断后从断点继续。
-    状态文件为简单的 JSON（{completed_ids: [...], stats: {...}}）。
+    记录与当前输出文件对应的运行状态。
+
+    断点续传的唯一来源是最终输出 JSONL；checkpoint 仅保存：
+    - 与输出文件同步的统计快照
+    - 无法从输出文件反推的运行统计（如 API token 消耗）
     """
 
     def __init__(self, checkpoint_dir: str | Path, run_name: str):
@@ -134,8 +143,7 @@ class CheckpointManager:
     def _load(self) -> dict:
         def _empty_state() -> dict:
             return {
-                "completed_ids": [],
-                "completed_source_ids": [],
+                "output_source_ids": [],
                 "stats": {
                     "total_written": 0,
                     "total_source_docs_processed": 0,
@@ -148,23 +156,26 @@ class CheckpointManager:
             try:
                 with self._path.open(encoding="utf-8") as fh:
                     state = json.load(fh)
-                # 向后兼容旧 checkpoint：补齐新增统计字段
                 stats = state.setdefault("stats", {})
                 stats.setdefault("total_written", 0)
                 stats.setdefault("api_input_tokens", 0)
                 stats.setdefault("api_output_tokens", 0)
-                state.setdefault("completed_ids", [])
-                state.setdefault("completed_source_ids", [])
-                # 向后兼容：旧 checkpoint 缺失该统计时，按 completed_source_ids 重建
+                output_source_ids = state.get("output_source_ids")
+                if output_source_ids is None:
+                    output_source_ids = state.get("completed_source_ids", [])
+                state["output_source_ids"] = output_source_ids
                 stats.setdefault(
                     "total_source_docs_processed",
-                    len(set(state.get("completed_source_ids", []))),
+                    len(set(output_source_ids)),
                 )
-                n = len(state.get("completed_ids", []))
-                logger.info(f"加载断点: 已完成 {n} 条 ({self._path})")
+                logger.info(
+                    "加载运行状态: 已写入 %s 条 (%s)",
+                    stats["total_written"],
+                    self._path,
+                )
                 return state
             except Exception as exc:
-                logger.warning(f"断点文件读取失败，将从头开始: {exc}")
+                logger.warning(f"运行状态文件读取失败，将从头开始: {exc}")
         return _empty_state()
 
     def _save(self) -> None:
@@ -173,49 +184,62 @@ class CheckpointManager:
             json.dump(self._state, fh, indent=2)
         tmp.replace(self._path)
 
-    def is_completed(self, record_id: str) -> bool:
-        return record_id in self._completed_set
-
-    def mark_completed(
+    def sync_output_snapshot(
         self,
-        record_id: str,
+        total_written: int,
+        source_doc_ids: list[str],
+    ) -> bool:
+        """
+        用当前输出文件快照刷新运行状态。
+
+        `total_written` 和 `source_doc_ids` 都由输出文件推导。
+        """
+        stats = self._state.setdefault("stats", {})
+        normalized_source_ids = list(dict.fromkeys(source_doc_ids))
+        current_written = int(stats.get("total_written", 0))
+        if (
+            current_written == total_written
+            and self._state.get("output_source_ids", []) == normalized_source_ids
+        ):
+            return False
+
+        if total_written < current_written:
+            logger.warning("检测到输出文件记录数回退，已重置 API token 统计。")
+            stats["api_input_tokens"] = 0
+            stats["api_output_tokens"] = 0
+
+        stats["total_written"] = total_written
+        stats["total_source_docs_processed"] = len(normalized_source_ids)
+        self._state["output_source_ids"] = normalized_source_ids
+        self._output_source_id_set = set(normalized_source_ids)
+        self._save()
+        return True
+
+    def record_write(
+        self,
         source_doc_id: str = "",
         input_tokens: int = 0,
         output_tokens: int = 0,
     ) -> None:
-        if record_id not in self._completed_set:
-            self._state["completed_ids"].append(record_id)
-            self._completed_set.add(record_id)
-            if source_doc_id and source_doc_id not in self._completed_source_set:
-                self._state["completed_source_ids"].append(source_doc_id)
-                self._completed_source_set.add(source_doc_id)
-                self._state["stats"]["total_source_docs_processed"] += 1
-            self._state["stats"]["total_written"] += 1
-            self._state["stats"]["api_input_tokens"] += input_tokens
-            self._state["stats"]["api_output_tokens"] += output_tokens
-            self._save()
+        stats = self._state.setdefault("stats", {})
+        stats["total_written"] += 1
+        if source_doc_id and source_doc_id not in self._output_source_set:
+            self._state["output_source_ids"].append(source_doc_id)
+            self._output_source_set.add(source_doc_id)
+            stats["total_source_docs_processed"] += 1
+        stats["api_input_tokens"] += input_tokens
+        stats["api_output_tokens"] += output_tokens
+        self._save()
 
     @property
-    def _completed_set(self) -> set:
-        # 缓存到 _set 属性避免每次重建
-        if not hasattr(self, "_completed_id_set"):
-            self._completed_id_set: set[str] = set(self._state["completed_ids"])
-        return self._completed_id_set
-
-    @property
-    def _completed_source_set(self) -> set:
-        if not hasattr(self, "_completed_source_id_set"):
-            self._completed_source_id_set: set[str] = set(
-                self._state.get("completed_source_ids", [])
-            )
-        return self._completed_source_id_set
+    def _output_source_set(self) -> set[str]:
+        if not hasattr(self, "_output_source_id_set"):
+            self._output_source_id_set = set(self._state.get("output_source_ids", []))
+        return self._output_source_id_set
 
     @property
     def stats(self) -> dict:
         return dict(self._state["stats"])
-
-    def completed_count(self) -> int:
-        return len(self._state["completed_ids"])
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +266,7 @@ def make_record_id(
 def load_existing_record_ids(filepath: str | Path) -> set[str]:
     """
     从既有 JSONL 中加载已存在的 record_id 集合。
-    用于断点恢复时幂等写入与 checkpoint 修复。
+    用于断点恢复时的幂等写入与 pending 计算。
     """
     path = Path(filepath)
     if not path.exists():

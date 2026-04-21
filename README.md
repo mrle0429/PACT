@@ -1,99 +1,64 @@
-# AI人类混合文本数据集构建工具
+# PACT: Proportion Assessment of Collaborative Texts between Human and AI
 
-## 快速开始
+English | [中文](README.zh-CN.md)
 
-1. 安装依赖
+PACT is an open dataset and construction pipeline for controlled human-AI mixed text. It starts from human-written documents, selects sentences according to target AI proportions, rewrites those sentences with an LLM, and outputs JSONL records with both sentence-level labels and document-level continuous labels.
 
-```bash
-# conda
-conda env create -f environment.yml
+This repository currently focuses on:
 
-# 或 pip
-pip install -r requirements.txt
-```
+- documenting and releasing the PACT dataset format;
+- providing a reproducible batch dataset construction pipeline;
+- supporting LLM rewriting experiments across multiple providers and models.
 
-2. 配置 API Key
+Single-text interactive testing has been temporarily removed from the public entrypoint and will be added back later.
 
-```bash
-cp .env.example .env
-# 编辑 .env
-```
+## Dataset Task
 
-3. 查看支持模型
+Each sample contains an original human document, `original_text`, and a mixed document, `mixed_text`. The mixed text is produced by rewriting only part of the sentences while keeping the remaining sentences unchanged from the human source.
 
-```bash
-python run.py list-models
-```
+Default construction settings:
 
-## 目录结构
+- AI sentence ratios: `0.0`, `0.2`, `0.4`, `0.6`, `0.8`, `1.0`
+- mixing modes: `block_replace`, `random_scatter`
+- sentence-level labels: `0` for human sentences, `1` for AI-rewritten sentences
+- document-level continuous labels: `lir`, `jaccard_distance`, `sentence_jaccard`, `cosine_distance`
+
+## Human Text Sources
+
+Human seed texts are sampled from four English sources:
+
+- ArXiv abstracts
+- OpenWebText
+- XSum news documents
+- DAIGT-v2 human essays
+
+The current default input file is:
 
 ```text
-ob/
-├── run.py              # 主入口：批量构建、模型列表
-├── src/                # 核心实现
-├── scripts/            # 采样、清洗、单条调试、分析脚本
-├── docs/               # 流程文档
-├── data/               # 原始与清洗后的数据
-├── output/             # 数据集输出、checkpoint、API 日志
-├── analysis/           # 图表等分析产物
-└── logs/               # 本地运行日志
+data/human_texts_1k.cleaned.jsonl
 ```
 
-## 运行方式
+Each input JSONL record must contain at least:
 
-### 批量构建（batch）
-
-```bash
-# dry-run（不调用 API）
-python run.py batch --dry-run --max-docs 10
-
-# 正式运行（默认模型：MiniMax-M2.7）
-python run.py batch
-
-# 指定模型
-python run.py batch --model llama4-fast:latest
-python run.py batch --model gemma4
-python run.py batch --model MiniMax-M2.7
-python run.py batch --model claude-haiku-4.5
+```json
+{"id": "arxiv_0902.3253", "text": "...", "sentence_count": 12}
 ```
 
-常用参数：
+## Output Format
 
-- `--source`：数据源路径（`.json` 或 `.jsonl`）
-- `--ratios`：AI 比例列表，如 `0.0,0.2,0.4,0.6,0.8,1.0`
-- `--modes`：混合模式列表，如 `block_replace,random_scatter`
-- `--domains`：领域过滤（逗号分隔）
-- `--max-docs`：最多处理文档数
-- `--concurrent`：并发请求数
-- `--seed`：随机种子
+Batch construction writes JSONL files under `output/`. The default filename pattern is:
 
-### 单文本测试
-
-```bash
-# 直接修改脚本顶部参数后运行
-python scripts/run_single.py
+```text
+output/mixed_dataset_<model-name>.jsonl
 ```
 
-更多数据准备与分析脚本：
-
-- 采样：`python scripts/sample_human_texts.py`
-- 清洗：`python scripts/clean_human_texts.py --input data/human_texts_10k.jsonl --output data/human_texts_10k.cleaned.jsonl`
-- 质量检查：`python scripts/check_data_quality.py`
-- 比例分析图：`python scripts/plot_ratio_analysis.py`
-
-## 输出文件
-
-- 数据集：`output/mixed_dataset.jsonl`
-- checkpoint：`output/checkpoints/run_{model}_{dataset}_{fingerprint}.json`
-- API 日志：`output/api_logs/{model}_{dataset}.jsonl`
-
-### JSONL 记录结构（当前实现）
+Example record:
 
 ```json
 {
-  "id": "raid_dev__books-e52f03d8__r40_block",
-  "source_dataset": "raid_dev",
-  "source_domain": "books",
+  "id": "arxiv_1409.3719_r40_block",
+  "source_dataset": "arxiv",
+  "source_domain": "academic",
   "original_text": "...",
   "mixed_text": "...",
   "n_sentences": 6,
@@ -103,60 +68,120 @@ python scripts/run_single.py
   "sentence_labels": [1, 0, 1, 0, 0, 0],
   "lir": 0.3822,
   "jaccard_distance": 0.2451,
+  "sentence_jaccard": 0.2113,
   "cosine_distance": 0.1893,
   "extra": {}
 }
 ```
 
-## 关键行为说明
+## Pipeline Overview
 
-- `target_ratio=0.0` 不调用 API，直接保留原文。
-- API 改写失败或覆盖不完整（返回句子数小于请求句子数）时，该样本会被跳过，不写入数据集。
+The batch construction pipeline:
 
-## Ollama 接入
+1. Loads cleaned human seed texts.
+2. Splits each document into sentences.
+3. Assigns one mixing mode to each source document.
+4. Generates variants for each target AI ratio.
+5. Calls the selected LLM to rewrite only the selected sentence indices.
+6. Validates the LLM response and skips missing, incomplete, or malformed samples.
+7. Fills rewritten sentences back into the document to produce `mixed_text`.
+8. Computes sentence-level labels and document-level continuous labels.
+9. Appends valid samples to JSONL and maintains checkpoints.
 
-- 默认模型：`MiniMax-M2.7`
-- 默认 Base URL：`http://127.0.0.1:11434/api`
-- 调用接口：`POST /api/chat`
-- 默认 `keep_alive`：`5m`
-- 默认关闭环境代理影响：`trust_env=False`
-- `gemma4` 通过 `think=false` 显式关闭思考输出
+For resumable runs, the final JSONL output is treated as the source of truth. Checkpoints only store runtime statistics such as processed source documents and API token usage.
 
-如需覆盖本地默认值，可在 `.env` 中设置：
+## Installation
 
-```bash
-OLLAMA_BASE_URL=http://127.0.0.1:11434/api
-OLLAMA_KEEP_ALIVE=5m
-```
-
-## OpenRouter / Qwen 3.6 接入
-
-- 模型 key：`qwen3.6-plus-preview-free`
-- 实际 OpenRouter model id：`qwen/qwen3.6-plus-preview:free`
-- 接口基址：`https://openrouter.ai/api/v1`
-- 当前实现按 OpenRouter 要求开启 reasoning，但通过 `exclude=true` 不返回 reasoning 内容；同时优先请求 `json_object` 结构化输出
-
-在 `.env` 中配置：
+Using Conda:
 
 ```bash
-OPENROUTER_API_KEY=sk-or-...
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+conda env create -f environment.yml
+conda activate ob_dataset
 ```
 
-同一个 OpenRouter 配置也适用于：
+Or using pip:
 
-- `claude-haiku-4.5` -> `anthropic/claude-haiku-4.5`
+```bash
+pip install -r requirements.txt
+```
 
-## 当前支持模型
+## API Keys
 
-- `llama4-fast:latest`（Ollama / 原生 HTTP API）
-- `gemma4`（Ollama / 原生 HTTP API，thinking disabled）
-- `qwen3.6-plus-preview-free`（OpenRouter / OpenAI-compatible）
-- `claude-haiku-4.5`（OpenRouter / OpenAI-compatible）
-- `qwen3.5-plus`（DashScope / OpenAI-compatible）
-- `MiniMax-M2.7`（Anthropic-compatible，thinking disabled，利用被动 prompt cache）
-- `gemini-3.1-flash-lite-preview`（google-genai）
+Copy the environment template and fill in the provider keys you need:
 
-模型列表由 `src/config.py` 的 `SUPPORTED_MODELS` 决定。
+```bash
+cp .env.example .env
+```
 
-详细流程说明见 [`docs/dataset_plan.md`](/Volumes/Mac/Project/ob/docs/dataset_plan.md)。
+The current code supports OpenAI, Anthropic, Gemini, MiniMax, DashScope, DeepSeek, Doubao/Ark, OpenRouter, and Ollama-compatible local endpoints. You only need to configure the provider used by your selected model.
+
+## Usage
+
+List supported rewrite models:
+
+```bash
+python run.py list-models
+```
+
+Run a dry run without API calls to validate the pipeline:
+
+```bash
+python run.py batch --dry-run --max-docs 10
+```
+
+Run batch construction with the default model:
+
+```bash
+python run.py batch
+```
+
+Run batch construction with a specific model:
+
+```bash
+python run.py batch --model MiniMax-M2.7
+python run.py batch --model qwen3.5-flash
+python run.py batch --model gemini-3.1-flash-lite-preview
+python run.py batch --model claude-haiku-4.5
+python run.py batch --model gpt-5.4
+```
+
+Override generation and rate-limit settings at runtime:
+
+```bash
+python run.py batch \
+  --model MiniMax-M2.7 \
+  --temperature 0.2 \
+  --rpm 30 \
+  --max-output-tokens 1024
+```
+
+## Configuration
+
+Core configuration lives in `src/config.py`:
+
+- `source_path`: default input JSONL path
+- `output_dir`: output directory
+- `concurrent_requests`: async concurrency
+- `random_seed`: random seed
+- `ai_ratios`: target AI sentence ratios
+- `mixing_modes`: mixing strategies
+- `SUPPORTED_MODELS`: model names, providers, real model IDs, and model-level overrides
+
+Models share default values for `temperature`, `max_output_tokens`, and `requests_per_minute`. Individual models only override fields that differ from the shared defaults.
+
+## Current Scope
+
+Currently supported:
+
+- batch dataset construction;
+- dry-run pipeline validation;
+- multi-provider model registry;
+- append-only JSONL writing with resumable checkpoints;
+- sentence-level and document-level continuous label computation.
+
+Temporarily not exposed:
+
+- single-text interactive testing;
+- direct CLI overrides for input path, output directory, random seed, or ratio list through `run.py`.
+
+For implementation details, see `docs/dataset_plan.md`.

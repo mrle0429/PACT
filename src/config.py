@@ -1,10 +1,10 @@
 """
-配置管理模块 — 所有可调超参数集中在此，支持 .env 注入 API Key。
+配置管理模块
 """
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Literal
 
@@ -17,83 +17,169 @@ load_dotenv()
 # LLM Provider 配置
 # ---------------------------------------------------------------------------
 
-@dataclass
+ProviderName = Literal[
+    "openai",
+    "anthropic",
+    "gemini",
+    "minimax",
+    "dashscope",
+    "deepseek",
+    "doubao",
+    "ollama",
+    "openrouter",
+]
+
+DEFAULT_TEMPERATURE = 0.7
+DEFAULT_MAX_OUTPUT_TOKENS = 2048
+DEFAULT_REQUESTS_PER_MINUTE = 60
+
+
+@dataclass(frozen=True)
+class ModelParameters:
+    """LLM 调用参数。默认全局统一，必要时才按模型覆盖。"""
+
+    temperature: float = DEFAULT_TEMPERATURE
+    max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
+    requests_per_minute: int = DEFAULT_REQUESTS_PER_MINUTE   # 速率限制（RPM）
+
+    def with_overrides(
+        self,
+        *,
+        temperature: float | None = None,
+        max_output_tokens: int | None = None,
+        requests_per_minute: int | None = None,
+    ) -> ModelParameters:
+        return replace(
+            self,
+            temperature=self.temperature if temperature is None else temperature,
+            max_output_tokens=(
+                self.max_output_tokens
+                if max_output_tokens is None
+                else max_output_tokens
+            ),
+            requests_per_minute=(
+                self.requests_per_minute
+                if requests_per_minute is None
+                else requests_per_minute
+            ),
+        )
+
+    def validate(self) -> None:
+        if not 0 <= self.temperature <= 2:
+            raise ValueError(f"temperature 必须在 0 到 2 之间: {self.temperature}")
+        if self.max_output_tokens <= 0:
+            raise ValueError(f"max_output_tokens 必须大于 0: {self.max_output_tokens}")
+        if self.requests_per_minute <= 0:
+            raise ValueError(f"requests_per_minute 必须大于 0: {self.requests_per_minute}")
+
+
+DEFAULT_MODEL_PARAMETERS = ModelParameters()
+
+
+@dataclass(frozen=True)
 class ModelConfig:
-    """单个 LLM 模型的调用参数。"""
-    provider: Literal["openai", "anthropic", "gemini", "minimax", "dashscope", "deepseek", "doubao", "ollama", "openrouter"]
+    """单个 LLM 模型的 provider 身份与默认调用参数。"""
+
+    provider: ProviderName
     model_id: str
-    temperature: float = 0.7
-    max_output_tokens: int = 2048
-    requests_per_minute: int = 60   # 速率限制（RPM）
+    params: ModelParameters = DEFAULT_MODEL_PARAMETERS
+
+    @property
+    def temperature(self) -> float:
+        return self.params.temperature
+
+    @property
+    def max_output_tokens(self) -> int:
+        return self.params.max_output_tokens
+
+    @property
+    def requests_per_minute(self) -> int:
+        return self.params.requests_per_minute
+
+
+def _model(
+    provider: ProviderName,
+    model_id: str,
+    *,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
+    requests_per_minute: int | None = None,
+) -> ModelConfig:
+    """
+    创建模型配置。
+
+    大多数模型直接继承 DEFAULT_MODEL_PARAMETERS；只有确实需要不同限流、
+    温度或输出长度时，才在这里传入覆盖值。
+    """
+    return ModelConfig(
+        provider=provider,
+        model_id=model_id,
+        params=DEFAULT_MODEL_PARAMETERS.with_overrides(
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            requests_per_minute=requests_per_minute,
+        ),
+    )
 
 
 SUPPORTED_MODELS: dict[str, ModelConfig] = {
-    # --- Ollama（本地 HTTP API）---
-    "llama4-fast:latest": ModelConfig(
-        provider="ollama",
-        model_id="llama4-fast:latest",
-        temperature=0.2,
-        requests_per_minute=30,
-    ),
-    "gemma4": ModelConfig(
-        provider="ollama",
-        model_id="gemma4",
-        temperature=0.7,
-        requests_per_minute=30,
+    # --- OpenRouter ---
+    "llama4-fast:latest": _model(
+        provider="openrouter",
+        model_id="meta-llama/llama-4-scout",
     ),
 
-    "gemini-3.1-flash-lite-preview": ModelConfig(
+    # --- Gemini ---
+    "gemma4": _model(
+        provider="gemini",
+        model_id="gemma-4-31b-it",
+    ),
+
+    "gemini-3.1-flash-lite-preview": _model(
         provider="gemini",
         model_id="gemini-3.1-flash-lite-preview",
-        temperature=0.7,
-        requests_per_minute=120,
     ),
     # --- MiniMax（Anthropic API 兼容）---
-    "MiniMax-M2.7": ModelConfig(
+    "MiniMax-M2.7": _model(
         provider="minimax",
         model_id="MiniMax-M2.7",
-        temperature=0.7,
-        requests_per_minute=60,
     ),
     # --- DashScope / Qwen（OpenAI API 兼容）---
-    "qwen3.5-plus": ModelConfig(
+    "qwen3.5-plus": _model(
         provider="dashscope",
         model_id="qwen3.5-plus",
-        temperature=0.1,
-        requests_per_minute=60,
     ),
-    "qwen3.5-flash": ModelConfig(
+    "qwen3.6-plus": _model(
         provider="dashscope",
-        model_id="qwen3.5-flash-2026-02-23",
-        temperature=0.7,
-        requests_per_minute=60,
+        model_id="qwen3.6-plus",
+    ),
+    "qwen3.5-flash": _model(
+        provider="dashscope",
+        model_id="qwen3.5-flash",
     ),
     # --- OpenRouter / Qwen 3.6（OpenAI API 兼容）---
-    "qwen3.6-plus-preview-free": ModelConfig(
+    "qwen3.6-plus-preview-free": _model(
         provider="openrouter",
         model_id="qwen/qwen3.6-plus-preview:free",
-        temperature=0.1,
-        requests_per_minute=60,
     ),
     # --- OpenRouter / Claude Haiku 4.5（OpenAI API 兼容）---
-    "claude-haiku-4.5": ModelConfig(
+    "claude-haiku-4.5": _model(
         provider="openrouter",
         model_id="anthropic/claude-haiku-4.5",
-        temperature=0.1,
-        requests_per_minute=60,
+    ),
+    "gpt-5.4": _model(
+        provider="openrouter",
+        model_id="openai/gpt-5.4",
     ),
     # --- DeepSeek（OpenAI API 兼容）---
-    "DeepSeek-V3.2": ModelConfig(
+    "DeepSeek-V3.2": _model(
         provider="deepseek",
         model_id="deepseek-chat",
-        temperature=0.7
     ),
     # --- 豆包 / Doubao（火山方舟 Ark，OpenAI API 兼容）---
-    "doubao-seed-2-0-pro": ModelConfig(
+    "doubao-seed-2-0-pro": _model(
         provider="doubao",
         model_id="doubao-seed-2-0-pro-260215",
-        temperature=0.7,
-        requests_per_minute=60,
     ),
 }
 
@@ -110,6 +196,9 @@ class DatasetConfig:
     output_dir: str = "output"
     concurrent_requests: int = 8
     random_seed: int = 42
+    temperature: float | None = None
+    max_output_tokens: int | None = None
+    requests_per_minute: int | None = None
 
     # --- 由运行时参数派生 ---
     source_tag: str = field(init=False)
@@ -181,4 +270,12 @@ class DatasetConfig:
                 f"未知模型 '{self.rewrite_model}'，"
                 f"可选: {list(SUPPORTED_MODELS.keys())}"
             )
-        return SUPPORTED_MODELS[self.rewrite_model]
+        model_cfg = SUPPORTED_MODELS[self.rewrite_model]
+        params = model_cfg.params.with_overrides(
+            temperature=self.temperature,
+            max_output_tokens=self.max_output_tokens,
+            requests_per_minute=self.requests_per_minute,
+        )
+        params.validate()
+
+        return replace(model_cfg, params=params)
