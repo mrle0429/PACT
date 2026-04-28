@@ -1,0 +1,136 @@
+{
+  "by_source_file": {
+    "test": {
+      "mixed_dataset_DeepSeek-V3.2.jsonl": 485,
+      "mixed_dataset_MiniMax-M2.7.jsonl": 180,
+      "mixed_dataset_doubao-seed-2-0-pro.jsonl": 191,
+      "mixed_dataset_gemini-3.1-flash-lite-preview.jsonl": 502,
+      "mixed_dataset_llama4-fast:latest.jsonl": 493,
+      "mixed_dataset_qwen3.5-flash.jsonl": 593,
+      "mixed_dataset_qwen3.5-plus.jsonl": 492,
+      "mixed_dataset_qwen3.6-plus.jsonl": 383
+    },
+    "train": {
+      "mixed_dataset_DeepSeek-V3.2.jsonl": 3801,
+      "mixed_dataset_MiniMax-M2.7.jsonl": 1369,
+      "mixed_dataset_doubao-seed-2-0-pro.jsonl": 1380,
+      "mixed_dataset_gemini-3.1-flash-lite-preview.jsonl": 3950,
+      "mixed_dataset_llama4-fast:latest.jsonl": 3914,
+      "mixed_dataset_qwen3.5-flash.jsonl": 4694,
+      "mixed_dataset_qwen3.5-plus.jsonl": 3892,
+      "mixed_dataset_qwen3.6-plus.jsonl": 3001
+    },
+    "val": {
+      "mixed_dataset_DeepSeek-V3.2.jsonl": 480,
+      "mixed_dataset_MiniMax-M2.7.jsonl": 177,
+      "mixed_dataset_doubao-seed-2-0-pro.jsonl": 177,
+      "mixed_dataset_gemini-3.1-flash-lite-preview.jsonl": 490,
+      "mixed_dataset_llama4-fast:latest.jsonl": 490,
+      "mixed_dataset_qwen3.5-flash.jsonl": 585,
+      "mixed_dataset_qwen3.5-plus.jsonl": 485,
+      "mixed_dataset_qwen3.6-plus.jsonl": 376
+    }
+  },
+  "by_source_model": {
+    "test": {
+      "DeepSeek-V3.2": 485,
+      "MiniMax-M2.7": 180,
+      "doubao-seed-2-0-pro": 191,
+      "gemini-3.1-flash-lite-preview": 502,
+      "human": 101,
+      "llama4-fast:latest": 493,
+      "qwen3.5-flash": 492,
+      "qwen3.5-plus": 492,
+      "qwen3.6-plus": 383
+    },
+    "train": {
+      "DeepSeek-V3.2": 3801,
+      "MiniMax-M2.7": 1369,
+      "doubao-seed-2-0-pro": 1380,
+      "gemini-3.1-flash-lite-preview": 3950,
+      "human": 798,
+      "llama4-fast:latest": 3914,
+      "qwen3.5-flash": 3896,
+      "qwen3.5-plus": 3892,
+      "qwen3.6-plus": 3001
+    },
+    "val": {
+      "DeepSeek-V3.2": 480,
+      "MiniMax-M2.7": 177,
+      "doubao-seed-2-0-pro": 177,
+      "gemini-3.1-flash-lite-preview": 490,
+      "human": 99,
+      "llama4-fast:latest": 490,
+      "qwen3.5-flash": 486,
+      "qwen3.5-plus": 485,
+      "qwen3.6-plus": 376
+    }
+  },
+  "by_target_ai_ratio": {
+    "test": {
+      "0.0": 101,
+      "0.2": 657,
+      "0.4": 647,
+      "0.6": 643,
+      "0.8": 638,
+      "1.0": 633
+    },
+    "train": {
+      "0.0": 798,
+      "0.2": 5142,
+      "0.4": 5111,
+      "0.6": 5030,
+      "0.8": 4976,
+      "1.0": 4944
+    },
+    "val": {
+      "0.0": 99,
+      "0.2": 644,
+      "0.4": 634,
+      "0.6": 629,
+      "0.8": 631,
+      "1.0": 623
+    }
+  },
+  "coverage_strata_counts": {
+    "DeepSeek-V3.2|MiniMax-M2.7|doubao-seed-2-0-pro|gemini-3.1-flash-lite-preview|llama4-fast:latest|qwen3.5-flash|qwen3.5-plus": 12,
+    "DeepSeek-V3.2|MiniMax-M2.7|doubao-seed-2-0-pro|gemini-3.1-flash-lite-preview|llama4-fast:latest|qwen3.5-flash|qwen3.5-plus|qwen3.6-plus": 294,
+    "DeepSeek-V3.2|MiniMax-M2.7|gemini-3.1-flash-lite-preview|llama4-fast:latest|qwen3.5-flash|qwen3.5-plus": 25,
+    "DeepSeek-V3.2|MiniMax-M2.7|gemini-3.1-flash-lite-preview|llama4-fast:latest|qwen3.5-flash|qwen3.5-plus|qwen3.6-plus": 60,
+    "DeepSeek-V3.2|doubao-seed-2-0-pro|gemini-3.1-flash-lite-preview|llama4-fast:latest|qwen3.5-flash|qwen3.5-plus|qwen3.6-plus": 75,
+    "DeepSeek-V3.2|gemini-3.1-flash-lite-preview|llama4-fast:latest|qwen3.5-flash|qwen3.5-plus": 176,
+    "DeepSeek-V3.2|gemini-3.1-flash-lite-preview|llama4-fast:latest|qwen3.5-flash|qwen3.5-plus|qwen3.6-plus": 353,
+    "DeepSeek-V3.2|gemini-3.1-flash-lite-preview|llama4-fast:latest|qwen3.5-plus|qwen3.6-plus": 1,
+    "MiniMax-M2.7|gemini-3.1-flash-lite-preview|llama4-fast:latest|qwen3.5-flash|qwen3.5-plus|qwen3.6-plus": 1,
+    "doubao-seed-2-0-pro|llama4-fast:latest|qwen3.5-flash|qwen3.5-plus|qwen3.6-plus": 1
+  },
+  "coverage_stratified": true,
+  "dropped_duplicate_human_only_rows": 5563,
+  "human_id_counts": {
+    "test": 101,
+    "train": 798,
+    "val": 99
+  },
+  "input_files": {
+    "datasets/mixed_dataset_DeepSeek-V3.2.jsonl": 5764,
+    "datasets/mixed_dataset_MiniMax-M2.7.jsonl": 2124,
+    "datasets/mixed_dataset_doubao-seed-2-0-pro.jsonl": 2135,
+    "datasets/mixed_dataset_gemini-3.1-flash-lite-preview.jsonl": 5940,
+    "datasets/mixed_dataset_llama4-fast:latest.jsonl": 5895,
+    "datasets/mixed_dataset_qwen3.5-flash.jsonl": 5872,
+    "datasets/mixed_dataset_qwen3.5-plus.jsonl": 5867,
+    "datasets/mixed_dataset_qwen3.6-plus.jsonl": 4546
+  },
+  "ratios": {
+    "test": 0.1,
+    "train": 0.8,
+    "val": 0.1
+  },
+  "row_counts": {
+    "test": 3319,
+    "train": 26001,
+    "val": 3260
+  },
+  "seed": 42,
+  "skipped_rows_without_split_group": 0
+}
