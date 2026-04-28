@@ -149,6 +149,7 @@ class RewriteResult:
         "model_id",
         "input_tokens",
         "output_tokens",
+        "prompt",
         "missing_indices",
         "invalid_indices",
         "extra_indices",
@@ -161,6 +162,7 @@ class RewriteResult:
         model_id: str,
         input_tokens: int = 0,
         output_tokens: int = 0,
+        prompt: str = "",
         missing_indices: list[int] | None = None,
         invalid_indices: list[int] | None = None,
         extra_indices: list[int] | None = None,
@@ -170,6 +172,7 @@ class RewriteResult:
         self.model_id = model_id
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
+        self.prompt = prompt
         self.missing_indices = missing_indices or []
         self.invalid_indices = invalid_indices or []
         self.extra_indices = extra_indices or []
@@ -246,6 +249,7 @@ class BaseLLMRewriter(ABC):
             self.model_cfg.model_id,
             input_tokens,
             output_tokens,
+            prompt=prompt,
             missing_indices=diagnostics["missing_indices"],
             invalid_indices=diagnostics["invalid_indices"],
             extra_indices=diagnostics["extra_indices"],

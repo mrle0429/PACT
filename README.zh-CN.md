@@ -52,6 +52,13 @@ data/human_texts_1k.cleaned.jsonl
 output/mixed_dataset_<model-name>.jsonl
 ```
 
+句子级二次 rewrite 结果默认写为：
+
+```text
+output/rewrite_<source-model>.jsonl
+output/rewrite_<source-model>__by_<rewriter-model>.jsonl
+```
+
 单条记录示例：
 
 ```json
@@ -143,6 +150,19 @@ python run.py batch --model qwen3.5-flash
 python run.py batch --model gemini-3.1-flash-lite-preview
 python run.py batch --model claude-haiku-4.5
 python run.py batch --model gpt-5.4
+```
+
+对现有 `mixed_dataset_*.jsonl` 做句子级二次 rewrite：
+
+```bash
+# 默认读取 output/mixed_dataset_<model>.jsonl
+python run.py rewrite --model claude-haiku-4.5
+
+# 指定输入 mixed_dataset 的来源模型，并使用另一个模型做二次 rewrite
+python run.py rewrite --input-model qwen3.5-flash --model claude-haiku-4.5
+
+# dry-run 检查流程
+python run.py rewrite --model claude-haiku-4.5 --dry-run --max-records 10
 ```
 
 运行时覆盖生成参数和限速参数：

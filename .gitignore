@@ -52,3 +52,5 @@ analysis/*.png
 analysis/
 .cache/
 scripts/
+
+split/
