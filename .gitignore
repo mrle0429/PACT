@@ -22,6 +22,7 @@ __pycache__/
 # ── 分发 / 构建产物 ──────────────────────────────────────────
 build/
 dist/
+node_modules/
 *.egg-info/
 .eggs/
 

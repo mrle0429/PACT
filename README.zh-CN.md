@@ -130,6 +130,51 @@ cp .env.example .env
 python run.py list-models
 ```
 
+## 交互式展示网页
+
+仓库包含一个 PACT 数据构造 Demo，用于公开展示单条文本的完整数据流：
+
+```text
+输入文本 → 分句 → 选择改写句 → 调用模型改写 → 回填混合文本 → 计算标签
+```
+
+后端复用现有 Python pipeline 组件，API key 只从服务端 `.env` 读取；前端提供 sample text、自定义文本、改写模型、混合模式和 AI 句子比例选择。
+
+公开部署时可以用 `PACT_DEMO_MODELS` 限制可调用模型，例如：
+
+```bash
+PACT_DEMO_MODELS=MiniMax-M2.7,qwen3.5-flash uvicorn src.web_app:app --host 0.0.0.0 --port 8000
+```
+
+启动后端：
+
+```bash
+uvicorn src.web_app:app --host 0.0.0.0 --port 8000
+```
+
+启动前端开发服务器：
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+开发环境默认访问：
+
+```text
+http://127.0.0.1:5173
+```
+
+生产部署时可先构建前端，FastAPI 会自动托管 `web/dist`：
+
+```bash
+cd web
+npm run build
+cd ..
+uvicorn src.web_app:app --host 0.0.0.0 --port 8000
+```
+
 不调用 API，先验证 pipeline 流程：
 
 ```bash

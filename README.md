@@ -123,6 +123,51 @@ List supported rewrite models:
 python run.py list-models
 ```
 
+## Interactive Web Demo
+
+This repository includes a PACT construction demo for a single text:
+
+```text
+input text -> sentence splitting -> target selection -> model rewrite -> backfill -> label computation
+```
+
+The backend reuses the existing Python pipeline components and reads API keys only from server-side `.env`. The frontend supports sample texts, custom input, rewrite model selection, mixing mode selection, and AI sentence ratio selection.
+
+For public deployments, restrict callable models with `PACT_DEMO_MODELS`:
+
+```bash
+PACT_DEMO_MODELS=MiniMax-M2.7,qwen3.5-flash uvicorn src.web_app:app --host 0.0.0.0 --port 8000
+```
+
+Start the backend:
+
+```bash
+uvicorn src.web_app:app --host 0.0.0.0 --port 8000
+```
+
+Start the frontend dev server:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5173
+```
+
+For deployment, build the frontend first; FastAPI will serve `web/dist` automatically:
+
+```bash
+cd web
+npm run build
+cd ..
+uvicorn src.web_app:app --host 0.0.0.0 --port 8000
+```
+
 Run a dry run without API calls to validate the pipeline:
 
 ```bash
