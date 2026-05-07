@@ -275,3 +275,59 @@ class OpenRouterRewriter(BaseLLMRewriter):
         input_tokens = usage.prompt_tokens if usage else 0
         output_tokens = usage.completion_tokens if usage else 0
         return content, input_tokens, output_tokens
+
+
+class MimoRewriter(BaseLLMRewriter):
+    """使用 OpenAI SDK 调用 Xiaomi MiMo 模型。"""
+
+    MIMO_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
+    _JSON_OBJECT_RESPONSE_FORMAT: dict[str, str] = {"type": "json_object"}
+
+    def __init__(
+        self,
+        cfg: DatasetConfig,
+        model_cfg: ModelConfig,
+        api_logger: ApiCallLogger | None = None,
+    ):
+        super().__init__(cfg, model_cfg, api_logger)
+        try:
+            from openai import AsyncOpenAI
+        except ImportError as exc:
+            raise ImportError("MiMo 使用 OpenAI SDK，请安装: pip install openai") from exc
+        if not cfg.mimo_api_key:
+            raise ValueError("未设置 MIMO_API_KEY 环境变量。")
+        self._client = AsyncOpenAI(
+            api_key=cfg.mimo_api_key,
+            base_url=cfg.mimo_base_url or self.MIMO_BASE_URL,
+        )
+
+    async def _call_api(
+        self,
+        user_prompt: str,
+        system_prompt: str | None = None,
+    ) -> tuple[str, int, int]:
+        try:
+            response = await self._client.chat.completions.create(
+                model=self.model_cfg.model_id,
+                messages=_build_openai_messages(user_prompt, system_prompt),
+                temperature=self.model_cfg.temperature,
+                max_tokens=self.model_cfg.max_output_tokens,
+                response_format=self._JSON_OBJECT_RESPONSE_FORMAT,
+            )
+        except Exception as exc:
+            err = str(exc).lower()
+            if ("response_format" in err) or ("json_object" in err) or ("unsupported" in err):
+                logger.warning("MiMo json_object response_format 不可用，回退到普通 chat 调用。")
+                response = await self._client.chat.completions.create(
+                    model=self.model_cfg.model_id,
+                    messages=_build_openai_messages(user_prompt, system_prompt),
+                    temperature=self.model_cfg.temperature,
+                    max_tokens=self.model_cfg.max_output_tokens,
+                )
+            else:
+                raise
+        content = response.choices[0].message.content or ""
+        usage = response.usage
+        input_tokens = usage.prompt_tokens if usage else 0
+        output_tokens = usage.completion_tokens if usage else 0
+        return content, input_tokens, output_tokens

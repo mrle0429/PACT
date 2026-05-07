@@ -120,7 +120,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-当前支持 OpenAI、Anthropic、Gemini、MiniMax、DashScope、DeepSeek、Doubao/Ark、OpenRouter，以及 Ollama 兼容的本地接口。只需要配置你实际使用模型对应的 provider。
+当前支持 OpenAI、Anthropic、Gemini、MiniMax、DashScope、DeepSeek、Doubao/Ark、OpenRouter、Xiaomi MiMo，以及 Ollama 兼容的本地接口。只需要配置你实际使用模型对应的 provider。
 
 ## 使用方式
 
@@ -191,6 +191,7 @@ python run.py batch
 
 ```bash
 python run.py batch --model MiniMax-M2.7
+python run.py batch --model mimo-v2.5-pro
 python run.py batch --model qwen3.5-flash
 python run.py batch --model gemini-3.1-flash-lite-preview
 python run.py batch --model claude-haiku-4.5

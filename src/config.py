@@ -27,6 +27,7 @@ ProviderName = Literal[
     "doubao",
     "ollama",
     "openrouter",
+    "mimo",
 ]
 
 DEFAULT_TEMPERATURE = 0.7
@@ -181,6 +182,11 @@ SUPPORTED_MODELS: dict[str, ModelConfig] = {
         provider="doubao",
         model_id="doubao-seed-2-0-pro-260215",
     ),
+    # --- Xiaomi MiMo（OpenAI API 兼容）---
+    "mimo-v2.5-pro": _model(
+        provider="mimo",
+        model_id="mimo-v2.5-pro",
+    ),
 }
 
 
@@ -263,6 +269,14 @@ class DatasetConfig:
     @property
     def openrouter_base_url(self) -> str:
         return os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+
+    @property
+    def mimo_api_key(self) -> str:
+        return os.getenv("MIMO_API_KEY", "")
+
+    @property
+    def mimo_base_url(self) -> str:
+        return os.getenv("MIMO_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1")
 
     def get_model_config(self) -> ModelConfig:
         if self.rewrite_model not in SUPPORTED_MODELS:

@@ -12,6 +12,7 @@ from .openai_compatible import (
     DashScopeRewriter,
     DeepSeekRewriter,
     DoubaoRewriter,
+    MimoRewriter,
     OpenAIRewriter,
     OpenRouterRewriter,
 )
@@ -26,6 +27,7 @@ PROVIDER_REWRITER_CLASSES: dict[str, type[BaseLLMRewriter]] = {
     "doubao": DoubaoRewriter,
     "ollama": OllamaRewriter,
     "openrouter": OpenRouterRewriter,
+    "mimo": MimoRewriter,
 }
 
 

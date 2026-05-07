@@ -18,6 +18,7 @@
   python run.py batch --model gemini-3.1-flash-lite-preview
   python run.py batch --model gemma4
   python run.py batch --model MiniMax-M2.7
+  python run.py batch --model mimo-v2.5-pro
   python run.py batch --model gpt-5.4
   python run.py batch --model llama4-fast:latest
 

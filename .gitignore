@@ -55,3 +55,6 @@ analysis/
 scripts/
 
 split/
+
+# ── 本地生成的 rewrite split 数据（体积大，不提交）────────────
+datasplit/rewrite_grouped/

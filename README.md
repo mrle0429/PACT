@@ -113,7 +113,7 @@ Copy the environment template and fill in the provider keys you need:
 cp .env.example .env
 ```
 
-The current code supports OpenAI, Anthropic, Gemini, MiniMax, DashScope, DeepSeek, Doubao/Ark, OpenRouter, and Ollama-compatible local endpoints. You only need to configure the provider used by your selected model.
+The current code supports OpenAI, Anthropic, Gemini, MiniMax, DashScope, DeepSeek, Doubao/Ark, OpenRouter, Xiaomi MiMo, and Ollama-compatible local endpoints. You only need to configure the provider used by your selected model.
 
 ## Usage
 
@@ -184,6 +184,7 @@ Run batch construction with a specific model:
 
 ```bash
 python run.py batch --model MiniMax-M2.7
+python run.py batch --model mimo-v2.5-pro
 python run.py batch --model qwen3.5-flash
 python run.py batch --model gemini-3.1-flash-lite-preview
 python run.py batch --model claude-haiku-4.5

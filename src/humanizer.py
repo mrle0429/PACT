@@ -18,12 +18,26 @@ def _build_numbered_context(sentences: list[str]) -> str:
     return "\n".join(f"[{index + 1}] {sentence}" for index, sentence in enumerate(sentences))
 
 
+HUMANIZER_PATTERN_GUIDELINES = """Humanization guidelines adapted from the blader/humanizer skill:
+- Remove inflated significance language such as "pivotal", "crucial", "testament", "underscores", "landscape", "showcase", and "plays a key role" when it adds no concrete meaning.
+- Avoid promotional or press-release phrasing such as "boasts", "nestled", "vibrant", "rich", "groundbreaking", "must-visit", "commitment to", and generic praise.
+- Replace vague attribution and weasel wording with direct, concrete phrasing; do not invent sources, facts, dates, or named examples.
+- Avoid superficial "-ing" add-ons such as "highlighting", "reflecting", "showcasing", "ensuring", or "contributing to" when they only create fake depth.
+- Prefer simple direct constructions with "is", "are", and "has" when they are clearer than "serves as", "stands as", "features", "offers", or "represents".
+- Avoid overused AI structures, including "not only X but also Y", "it is not just X, it is Y", forced three-item lists, false "from X to Y" ranges, and synonym cycling.
+- Reduce filler and hedging such as "in order to", "due to the fact that", "it is important to note", "could potentially", and "might possibly".
+- Remove chatbot artifacts, generic signposting, and generic positive conclusions such as "let's dive in", "here is", "I hope this helps", and "the future looks bright".
+- Avoid mechanical style markers such as em dash overuse, boldface-style emphasis, emojis, title-case phrasing, and clipped subjectless fragments when plain prose is better.
+- Vary sentence rhythm naturally while preserving the sentence's original role in the surrounding article.
+- Before returning the JSON, silently ask what still makes each rewritten sentence sound AI-generated, revise once if needed, and output only the final JSON."""
+
+
 def build_humanize_system_prompt(language_hint: str = "English") -> str:
-    return f"""You are a professional humanizer editor responsible for making AI-written sentences read more like natural human-authored text and not be detected as AI-generated.
+    return f"""You are a professional sentence-level humanizer editor responsible for reducing formulaic AI-writing artifacts and making AI-written sentences read more like natural human-authored text.
 
 Your task is to humanize only the sentences explicitly selected by the user.
 
-Requirements:
+Hard requirements:
 - Preserve the original meaning, factual content, entities, tense, and stance.
 - Keep the writing natural, fluent, and human-authored in {language_hint}.
 - Avoid generic, overly polished, template-like phrasing when a more natural wording is possible.
@@ -32,7 +46,9 @@ Requirements:
 - Each rewritten value must remain exactly one sentence.
 - Do not split, merge, drop, reorder, or summarize sentences.
 - Return only a strict JSON object that maps 1-indexed sentence numbers to rewritten sentence text.
-- Do not include any explanation, commentary, markdown, or extra text."""
+- Do not include any explanation, commentary, markdown, draft, audit notes, or extra text.
+
+{HUMANIZER_PATTERN_GUIDELINES}"""
 
 
 def build_humanize_user_prompt(
