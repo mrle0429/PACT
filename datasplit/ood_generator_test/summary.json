@@ -1,0 +1,55 @@
+{
+  "definition": "Generator-OOD test sets filtered to exclude human_id values seen in datasplit/benchmark_grouped/train.jsonl.",
+  "excluded_train_unique_human_id": 798,
+  "files": {
+    "mimo-v2.5-pro": {
+      "source": "datasets/mixed_dataset_mimo-v2.5-pro.jsonl",
+      "output": "datasplit/ood_generator_test/test_generator_ood_mimo-v2.5-pro.jsonl",
+      "input_rows": 5622,
+      "input_unique_human_id": 998,
+      "excluded_train_overlap_rows": 4486,
+      "excluded_train_overlap_unique_human_id": 798,
+      "kept_rows": 1136,
+      "kept_unique_human_id": 200
+    },
+    "gpt-5.4": {
+      "source": "datasets/mixed_dataset_gpt-5.4.jsonl",
+      "output": "datasplit/ood_generator_test/test_generator_ood_gpt-5.4.jsonl",
+      "input_rows": 1585,
+      "input_unique_human_id": 270,
+      "excluded_train_overlap_rows": 1311,
+      "excluded_train_overlap_unique_human_id": 223,
+      "kept_rows": 274,
+      "kept_unique_human_id": 47
+    },
+    "claude-haiku-4.5": {
+      "source": "datasets/mixed_dataset_claude-haiku-4.5.jsonl",
+      "output": "datasplit/ood_generator_test/test_generator_ood_claude-haiku-4.5.jsonl",
+      "input_rows": 1058,
+      "input_unique_human_id": 192,
+      "excluded_train_overlap_rows": 866,
+      "excluded_train_overlap_unique_human_id": 158,
+      "kept_rows": 192,
+      "kept_unique_human_id": 34
+    },
+    "gemma4": {
+      "source": "datasets/mixed_dataset_gemma4.jsonl",
+      "output": "datasplit/ood_generator_test/test_generator_ood_gemma4.jsonl",
+      "input_rows": 1766,
+      "input_unique_human_id": 308,
+      "excluded_train_overlap_rows": 1441,
+      "excluded_train_overlap_unique_human_id": 250,
+      "kept_rows": 325,
+      "kept_unique_human_id": 58
+    }
+  },
+  "merged": {
+    "all_output": "datasplit/ood_generator_test/test_generator_ood_all.jsonl",
+    "all_rows": 1927,
+    "all_unique_human_id": 200,
+    "balanced_output": "datasplit/ood_generator_test/test_generator_ood_balanced.jsonl",
+    "balanced_rows_per_model": 192,
+    "balanced_rows": 768,
+    "balanced_unique_human_id": 49
+  }
+}
