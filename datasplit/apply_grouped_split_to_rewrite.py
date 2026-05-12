@@ -30,10 +30,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from src.config import DatasetConfig
 from src.label_calculator import (
     compute_cosine_distance,
     compute_jaccard_distance,
-    compute_lir,
+    compute_labels,
     compute_sentence_jaccard,
 )
 from src.sentence_processor import split_into_sentences
@@ -54,6 +55,7 @@ MIXED_SPLIT_DIR = "datasplit/benchmark_grouped"
 DEFAULT_OUTPUT_DIR = "datasplit/rewrite_grouped"
 RATIO_SUFFIX_RE = re.compile(r"^(?P<human_id>.+)_r(?:0|20|40|60|80|100)_(?P<mode>.+)$")
 SPLITS = ("train", "val", "test")
+METRIC_CONFIG = DatasetConfig(rewrite_model="mimo-v2.5-pro")
 
 
 def parse_args() -> argparse.Namespace:
@@ -206,25 +208,36 @@ def compute_text_metrics(
     aligned = len(variant_sentences) == len(sentence_labels)
     ai_indices = ai_indices_from_labels(sentence_labels)
 
-    lir = compute_lir(ai_indices, variant_sentences) if aligned else None
+    if aligned:
+        return compute_labels(
+            original_text=original_text,
+            mixed_sentences=variant_sentences,
+            ai_indices=ai_indices,
+            cfg=METRIC_CONFIG,
+        ), True
+
     return (
         {
-            "lir": lir,
+            "lir": None,
             "jaccard_distance": compute_jaccard_distance(original_text, variant_text),
             "sentence_jaccard": compute_sentence_jaccard(
                 original_text,
                 variant_text,
                 sentence_labels,
             ),
-            "cosine_distance": compute_cosine_distance(original_text, variant_text),
+            "cosine_distance": compute_cosine_distance(
+                original_text,
+                variant_text,
+                METRIC_CONFIG.ngram_n,
+            ),
         },
-        aligned,
+        False,
     )
 
 
 def add_metric_fields(
     row: dict[str, Any],
-    mixed_metrics_by_key: dict[tuple[str, str], dict[str, float | None]],
+    _mixed_metrics_by_key: dict[tuple[str, str], dict[str, float | None]],
 ) -> tuple[dict[str, Any], dict[str, int]]:
     output = dict(row)
     stats = {
@@ -234,29 +247,19 @@ def add_metric_fields(
         "rewrite_lir_alignment_failures": 0,
     }
 
-    row_id = str(output.get("id", ""))
-    model = source_model(output)
-    mixed_metrics = mixed_metrics_by_key.get((row_id, model))
-
-    # 0% rows are deduplicated as "human" in the mixed benchmark, but rewrite
-    # files still carry their source model name. Recomputing gives the exact
-    # zero-valued mixed metrics for those rows without relying on model matching.
-    if mixed_metrics is None:
-        mixed_raw, mixed_aligned = compute_text_metrics(
-            original_text=str(output.get("original_text", "")),
-            variant_text=str(output.get("mixed_text", "")),
-            sentence_labels=output.get("sentence_labels", []),
-        )
-        mixed_metrics = {
-            "mixed_lir": mixed_raw["lir"],
-            "mixed_jaccard_distance": mixed_raw["jaccard_distance"],
-            "mixed_sentence_jaccard": mixed_raw["sentence_jaccard"],
-            "mixed_cosine_distance": mixed_raw["cosine_distance"],
-        }
-        stats["mixed_metrics_recomputed"] += 1
-        stats["mixed_lir_alignment_failures"] += int(not mixed_aligned)
-    else:
-        stats["mixed_metrics_from_source"] += 1
+    mixed_raw, mixed_aligned = compute_text_metrics(
+        original_text=str(output.get("original_text", "")),
+        variant_text=str(output.get("mixed_text", "")),
+        sentence_labels=output.get("sentence_labels", []),
+    )
+    mixed_metrics = {
+        "mixed_lir": mixed_raw["lir"],
+        "mixed_jaccard_distance": mixed_raw["jaccard_distance"],
+        "mixed_sentence_jaccard": mixed_raw["sentence_jaccard"],
+        "mixed_cosine_distance": mixed_raw["cosine_distance"],
+    }
+    stats["mixed_metrics_recomputed"] += 1
+    stats["mixed_lir_alignment_failures"] += int(not mixed_aligned)
 
     output.update(mixed_metrics)
 
