@@ -2,6 +2,8 @@
 
 English | [中文](README.zh-CN.md)
 
+[![Online Demo](https://img.shields.io/badge/Online%20Demo-uspa.zhangbh.com-2ea44f?style=flat-square)](http://uspa.zhangbh.com/)
+
 PACT is an open dataset and construction pipeline for controlled human-AI mixed text. It starts from human-written documents, selects sentences according to target AI proportions, rewrites those sentences with an LLM, and outputs JSONL records with both sentence-level labels and document-level continuous labels.
 
 This repository currently focuses on:
@@ -126,6 +128,8 @@ python run.py list-models
 ## Interactive Web Demo
 
 This repository includes a PACT construction demo for a single text:
+
+Online demo: <http://uspa.zhangbh.com/>
 
 ```text
 input text -> sentence splitting -> target selection -> model rewrite -> backfill -> label computation

@@ -2,6 +2,8 @@
 
 [English](README.md) | 中文
 
+[![线上 Demo](https://img.shields.io/badge/%E7%BA%BF%E4%B8%8A%20Demo-uspa.zhangbh.com-2ea44f?style=flat-square)](http://uspa.zhangbh.com/)
+
 PACT 是一个面向开源发布的可控人类-AI 混合文本数据集与构建 pipeline。它从人类文本出发，按指定比例选择句子交给 LLM 改写，并输出带有句子级标签和文档级连续标签的 JSONL 数据集。
 
 本仓库当前重点是：
@@ -133,6 +135,8 @@ python run.py list-models
 ## 交互式展示网页
 
 仓库包含一个 PACT 数据构造 Demo，用于公开展示单条文本的完整数据流：
+
+线上 Demo：<http://uspa.zhangbh.com/>
 
 ```text
 输入文本 → 分句 → 选择改写句 → 调用模型改写 → 回填混合文本 → 计算标签
