@@ -73,6 +73,26 @@ type DemoResult = {
 const FALLBACK_TEXT =
   'Online learning gives students more control over when and where they study. This flexibility can be especially helpful for people who have jobs, family responsibilities, or long commutes. At the same time, virtual classes require a high level of self-discipline. Students may fall behind if they do not manage deadlines carefully or ask questions when they are confused. In my view, online learning works best when schools combine recorded material with regular live discussion. That balance preserves flexibility while still giving students a sense of structure and community.';
 
+const MODEL_DISPLAY_NAMES: Record<string, string> = {
+  'llama4-fast:latest': 'Llama 4',
+  gemma4: 'Gemma 4',
+  'gemini-3.1-flash-lite-preview': 'Gemini 3.1 Flash Lite',
+  'MiniMax-M2.7': 'MiniMax M2.7',
+  'qwen3.5-plus': 'Qwen 3.5 Plus',
+  'qwen3.6-plus': 'Qwen 3.6 Plus',
+  'qwen3.5-flash': 'Qwen 3.5 Flash',
+  'qwen3.6-plus-preview-free': 'Qwen 3.6 Plus',
+  'claude-haiku-4.5': 'Claude Haiku 4.5',
+  'gpt-5.4': 'GPT-5.4',
+  'DeepSeek-V3.2': 'DeepSeek V3.2',
+  'doubao-seed-2-0-pro': 'Doubao Seed 2.0 Pro',
+  'mimo-v2.5-pro': 'MiMo V2.5 Pro'
+};
+
+function formatModelName(modelName: string) {
+  return MODEL_DISPLAY_NAMES[modelName] ?? modelName;
+}
+
 function App() {
   const [config, setConfig] = useState<DemoConfig | null>(null);
   const [samples, setSamples] = useState<SampleText[]>([]);
@@ -223,7 +243,7 @@ function App() {
               <select value={model} onChange={(event) => setModel(event.target.value)}>
                 {(config?.models ?? []).map((item) => (
                   <option value={item.name} key={item.name}>
-                    {item.name}
+                    {formatModelName(item.name)}
                   </option>
                 ))}
               </select>
@@ -358,7 +378,7 @@ function ResultHeader({ result }: { result: DemoResult }) {
       <div>
         <h2>{result.ok ? 'Mixed Text Generated' : 'Local Steps Preserved'}</h2>
         <p>
-          {result.model} · {result.mixing_mode} · {Math.round(result.target_ratio * 100)}% target
+          {formatModelName(result.model)} · {result.mixing_mode} · {Math.round(result.target_ratio * 100)}% target
         </p>
       </div>
       <div className={result.ok ? 'status-pill success' : 'status-pill warning'}>

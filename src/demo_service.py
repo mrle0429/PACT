@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import os
 import random
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Literal
 
 from .config import DatasetConfig, SUPPORTED_MODELS
@@ -23,12 +25,16 @@ from .label_calculator import (
     compute_sentence_jaccard,
 )
 from .llm_rewriter import RewriteResult, create_rewriter
+from .rewriters.base import build_rewrite_system_prompt, build_rewrite_user_prompt
 from .sentence_processor import (
     MixingMode,
     SentenceSelection,
     create_sentence_selection,
     split_into_sentences,
 )
+from .utils import extract_json_from_llm_response, get_logger
+
+logger = get_logger(__name__)
 
 MAX_DEMO_TEXT_CHARS = 6000
 MIN_DEMO_SENTENCES = 2
@@ -44,6 +50,8 @@ DEMO_MODEL_ALLOWLIST = tuple(
 )
 DEMO_RATIOS = (0.2, 0.4, 0.6, 0.8, 1.0)
 DEMO_MIXING_MODES: tuple[MixingMode, ...] = ("block_replace", "random_scatter")
+DEMO_CACHE_LOG_DIR = Path(os.getenv("PACT_DEMO_CACHE_LOG_DIR", "output/api_logs"))
+DEMO_CACHE_ONLY = os.getenv("PACT_DEMO_CACHE_ONLY", "").lower() in {"1", "true", "yes"}
 
 
 class DemoValidationError(ValueError):
@@ -289,33 +297,36 @@ async def run_demo_rewrite(
     error = ""
     ok = True
     if selection.selected_indices:
-        rewriter = create_rewriter(cfg)
-        try:
-            result = await asyncio.wait_for(
-                rewriter.rewrite(
-                    selection.sentences,
-                    selection.selected_indices,
-                    language_hint=language_hint,
-                    task_id=_make_demo_record_id(text, target_ratio, mixing_mode),
-                ),
-                timeout=timeout_seconds,
-            )
-            _validate_rewrite_result(selection, result)
+        task_id = _make_demo_record_id(
+            " ".join(selection.sentences),
+            target_ratio,
+            mixing_mode,
+        )
+        cached_result = _load_cached_demo_rewrite(
+            cfg=cfg,
+            selection=selection,
+            language_hint=language_hint,
+            task_id=task_id,
+        )
+        if cached_result is not None:
+            result = cached_result
             steps.append(
                 DemoStep(
                     id="rewrite",
                     label="Rewrite selected sentences",
                     status="complete",
                     detail=(
-                        f"{len(result.rewrites)} sentence(s) rewritten by "
-                        f"{cfg.rewrite_model}."
+                        f"{len(result.rewrites)} sentence(s) loaded from local "
+                        "API log cache; no provider API call was made."
                     ),
                 )
             )
-        except Exception as exc:
+        elif DEMO_CACHE_ONLY:
             ok = False
-            error = f"{type(exc).__name__}: {exc}"
-            result = RewriteResult({}, cfg.get_model_config().model_id)
+            error = (
+                "No cached rewrite was found; provider API call skipped because "
+                "PACT_DEMO_CACHE_ONLY=1."
+            )
             steps.append(
                 DemoStep(
                     id="rewrite",
@@ -324,8 +335,44 @@ async def run_demo_rewrite(
                     detail=error,
                 )
             )
-        finally:
-            await rewriter.aclose()
+        else:
+            rewriter = create_rewriter(cfg)
+            try:
+                result = await asyncio.wait_for(
+                    rewriter.rewrite(
+                        selection.sentences,
+                        selection.selected_indices,
+                        language_hint=language_hint,
+                        task_id=task_id,
+                    ),
+                    timeout=timeout_seconds,
+                )
+                _validate_rewrite_result(selection, result)
+                steps.append(
+                    DemoStep(
+                        id="rewrite",
+                        label="Rewrite selected sentences",
+                        status="complete",
+                        detail=(
+                            f"{len(result.rewrites)} sentence(s) rewritten by "
+                            f"{cfg.rewrite_model}."
+                        ),
+                    )
+                )
+            except Exception as exc:
+                ok = False
+                error = f"{type(exc).__name__}: {exc}"
+                result = RewriteResult({}, cfg.get_model_config().model_id)
+                steps.append(
+                    DemoStep(
+                        id="rewrite",
+                        label="Rewrite selected sentences",
+                        status="failed",
+                        detail=error,
+                    )
+                )
+            finally:
+                await rewriter.aclose()
     else:
         steps.append(
             DemoStep(
@@ -495,6 +542,202 @@ def _validate_rewrite_result(selection: SentenceSelection, result: RewriteResult
         raise DemoRewriteError(
             f"Sentence count changed after backfill: before={selection.n}, after={after_count}."
         )
+
+
+def _load_cached_demo_rewrite(
+    *,
+    cfg: DatasetConfig,
+    selection: SentenceSelection,
+    language_hint: str,
+    task_id: str,
+) -> RewriteResult | None:
+    if not DEMO_CACHE_LOG_DIR.exists():
+        return None
+
+    model_id = cfg.get_model_config().model_id
+    accepted_models = {cfg.rewrite_model, model_id}
+    system_prompt = build_rewrite_system_prompt(language_hint)
+    user_prompt = build_rewrite_user_prompt(
+        selection.sentences,
+        selection.selected_indices,
+    )
+    prompt = f"{system_prompt}\n\n{user_prompt}"
+
+    cached = _find_cached_demo_rewrite(
+        paths=_iter_demo_cache_paths(cfg.rewrite_model, include_other_models=False),
+        accepted_models=accepted_models,
+        selected_indices=selection.selected_indices,
+        selection=selection,
+        prompt=prompt,
+        task_id=task_id,
+        fallback_model_id=model_id,
+    )
+    if cached is not None:
+        logger.info(
+            "Demo rewrite cache hit: model=%s task_id=%s",
+            cfg.rewrite_model,
+            task_id,
+        )
+        return cached
+
+    cached = _find_cached_demo_rewrite(
+        paths=_iter_demo_cache_paths(cfg.rewrite_model, include_other_models=True),
+        accepted_models=None,
+        selected_indices=selection.selected_indices,
+        selection=selection,
+        prompt=prompt,
+        task_id=task_id,
+        fallback_model_id=model_id,
+    )
+    if cached is not None:
+        logger.info(
+            "Demo rewrite cache fallback hit: requested_model=%s cached_model=%s task_id=%s",
+            cfg.rewrite_model,
+            cached.model_id,
+            task_id,
+        )
+        return cached
+
+    return None
+
+
+def _find_cached_demo_rewrite(
+    *,
+    paths: list[Path],
+    accepted_models: set[str] | None,
+    selected_indices: list[int],
+    selection: SentenceSelection,
+    prompt: str,
+    task_id: str,
+    fallback_model_id: str,
+) -> RewriteResult | None:
+    for path in paths:
+        try:
+            with path.open("r", encoding="utf-8") as file_obj:
+                for line in file_obj:
+                    record = _load_api_log_record(line)
+                    if record is None:
+                        continue
+                    if not record.get("parse_ok"):
+                        continue
+                    cached_model = str(record.get("model", "")) or fallback_model_id
+                    if accepted_models is not None and cached_model not in accepted_models:
+                        continue
+                    if (
+                        str(record.get("task_id", "")) != task_id
+                        and str(record.get("prompt", "")) != prompt
+                    ):
+                        continue
+                    raw_response = str(record.get("raw_response", ""))
+                    result = _build_cached_rewrite_result(
+                        raw_response=raw_response,
+                        model_id=cached_model,
+                        prompt=prompt,
+                        selected_indices=selected_indices,
+                    )
+                    try:
+                        _validate_rewrite_result(selection, result)
+                    except DemoRewriteError:
+                        continue
+                    return result
+        except OSError as exc:
+            logger.warning("读取 Demo API 日志缓存失败: %s: %s", path, exc)
+    return None
+
+
+def _iter_demo_cache_paths(
+    model_name: str,
+    *,
+    include_other_models: bool,
+) -> list[Path]:
+    model_paths = sorted(DEMO_CACHE_LOG_DIR.glob(f"{model_name}_*.jsonl"))
+    if not include_other_models:
+        return model_paths
+    model_path_set = set(model_paths)
+    other_paths = [
+        path for path in sorted(DEMO_CACHE_LOG_DIR.glob("*.jsonl"))
+        if path not in model_path_set
+    ]
+    return other_paths
+
+
+def _load_api_log_record(line: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _build_cached_rewrite_result(
+    *,
+    raw_response: str,
+    model_id: str,
+    prompt: str,
+    selected_indices: list[int],
+) -> RewriteResult:
+    requested_keys = {str(index + 1) for index in selected_indices}
+    rewrites: dict[int, str] = {}
+    missing_indices: list[int] = []
+    invalid_indices: list[int] = []
+    extra_indices: list[int] = []
+    errors: list[str] = []
+
+    try:
+        parsed = extract_json_from_llm_response(raw_response)
+    except ValueError as exc:
+        return RewriteResult(
+            {},
+            model_id,
+            prompt=prompt,
+            missing_indices=list(selected_indices),
+            invalid_indices=list(selected_indices),
+            error=str(exc),
+        )
+
+    for key, value in parsed.items():
+        key_str = str(key).strip()
+        if key_str not in requested_keys:
+            try:
+                extra_indices.append(int(key_str) - 1)
+            except ValueError:
+                pass
+            continue
+        if not isinstance(value, str) or not value.strip():
+            invalid_indices.append(int(key_str) - 1)
+            errors.append(f"key={key_str} 非字符串或为空")
+            continue
+        rewritten = value.strip()
+        if len(split_into_sentences(rewritten)) != 1:
+            invalid_indices.append(int(key_str) - 1)
+            errors.append(f"key={key_str} 改写后不是单句")
+            continue
+        rewrites[int(key_str) - 1] = rewritten
+
+    for index in selected_indices:
+        if index not in rewrites and index not in invalid_indices:
+            missing_indices.append(index)
+
+    if missing_indices:
+        errors.append(
+            "缺失 key=" + ",".join(str(index + 1) for index in missing_indices)
+        )
+    if extra_indices:
+        errors.append(
+            "越权 key=" + ",".join(str(index + 1) for index in extra_indices)
+        )
+
+    return RewriteResult(
+        rewrites,
+        model_id,
+        input_tokens=0,
+        output_tokens=0,
+        prompt=prompt,
+        missing_indices=missing_indices,
+        invalid_indices=sorted(set(invalid_indices)),
+        extra_indices=sorted(set(extra_indices)),
+        error="; ".join(errors),
+    )
 
 
 def _make_demo_record_id(text: str, target_ratio: float, mixing_mode: str) -> str:

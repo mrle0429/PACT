@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-[![线上 Demo](https://img.shields.io/badge/%E7%BA%BF%E4%B8%8A%20Demo-uspa.zhangbh.com-2ea44f?style=flat-square)](http://uspa.zhangbh.com/)
+[![线上 Demo](https://img.shields.io/badge/%E7%BA%BF%E4%B8%8A%20Demo-pact.mrlepro.com-2ea44f?style=flat-square)](https://pact.mrlepro.com/)
 
 PACT 是一个面向开源发布的可控人类-AI 混合文本数据集与构建 pipeline。它从人类文本出发，按指定比例选择句子交给 LLM 改写，并输出带有句子级标签和文档级连续标签的 JSONL 数据集。
 
@@ -136,7 +136,7 @@ python run.py list-models
 
 仓库包含一个 PACT 数据构造 Demo，用于公开展示单条文本的完整数据流：
 
-线上 Demo：<http://uspa.zhangbh.com/>
+线上 Demo：<https://pact.mrlepro.com/>
 
 ```text
 输入文本 → 分句 → 选择改写句 → 调用模型改写 → 回填混合文本 → 计算标签
@@ -178,6 +178,9 @@ npm run build
 cd ..
 uvicorn src.web_app:app --host 0.0.0.0 --port 8000
 ```
+
+如果部署到已有博客、简历等服务的服务器上，建议参考
+[阿里云服务器部署指南](docs/deploy_aliyun.md)，使用独立子域名和本地反向代理端口，避免影响现有站点。
 
 不调用 API，先验证 pipeline 流程：
 
